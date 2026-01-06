@@ -21,6 +21,8 @@
 /build
 
 # misc
+/logs
+/.browser-data
 .DS_Store
 *.pem
 
