@@ -1,0 +1,20 @@
+2026/01/06-20:01:42.475 6898 Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-2\Default\Session Storage/MANIFEST-000001
+2026/01/06-20:01:42.476 6898 Recovering log #4
+2026/01/06-20:01:42.476 6898 Reusing old log d:\WEBSITE\Caodulieu\.browser-data\worker-2\Default\Session Storage/000004.log 
+2026/01/06-20:06:42.803 7a5c Level-0 table #7: started
+2026/01/06-20:06:42.821 7a5c Level-0 table #7: 22996 bytes OK
+2026/01/06-20:06:42.843 7a5c Delete type=0 #4
+2026/01/06-20:11:08.550 7a5c Level-0 table #9: started
+2026/01/06-20:11:08.565 7a5c Level-0 table #9: 29246 bytes OK
+2026/01/06-20:11:08.589 7a5c Delete type=0 #6
+2026/01/06-20:16:51.330 7a5c Level-0 table #11: started
+2026/01/06-20:16:51.348 7a5c Level-0 table #11: 31230 bytes OK
+2026/01/06-20:16:51.370 7a5c Delete type=0 #8
+2026/01/06-20:16:51.371 7a5c Compacting 4@0 + 0@1 files
+2026/01/06-20:16:51.382 7a5c Generated table #12@0: 20 keys, 6813 bytes
+2026/01/06-20:16:51.382 7a5c Compacted 4@0 + 0@1 files => 6813 bytes
+2026/01/06-20:16:51.403 7a5c compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/01/06-20:16:51.412 7a5c Delete type=2 #3
+2026/01/06-20:16:51.412 7a5c Delete type=2 #7
+2026/01/06-20:16:51.412 7a5c Delete type=2 #9
+2026/01/06-20:16:51.412 7a5c Delete type=2 #11

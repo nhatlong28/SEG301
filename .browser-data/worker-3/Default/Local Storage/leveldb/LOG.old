@@ -1,0 +1,30 @@
+2026/01/06-19:52:52.562 6a1c Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-3\Default\Local Storage\leveldb/MANIFEST-000001
+2026/01/06-19:52:52.565 6a1c Recovering log #3
+2026/01/06-19:52:52.565 6a1c Reusing old log d:\WEBSITE\Caodulieu\.browser-data\worker-3\Default\Local Storage\leveldb/000003.log 
+2026/01/06-19:53:52.573 b38c Level-0 table #5: started
+2026/01/06-19:53:52.582 b38c Level-0 table #5: 139691 bytes OK
+2026/01/06-19:53:52.604 b38c Delete type=0 #3
+2026/01/06-19:53:58.233 b38c Level-0 table #7: started
+2026/01/06-19:53:58.243 b38c Level-0 table #7: 96756 bytes OK
+2026/01/06-19:53:58.264 b38c Delete type=0 #4
+2026/01/06-19:54:33.206 b38c Level-0 table #9: started
+2026/01/06-19:54:33.225 b38c Level-0 table #9: 136555 bytes OK
+2026/01/06-19:54:33.271 b38c Delete type=0 #6
+2026/01/06-19:54:58.243 b38c Level-0 table #11: started
+2026/01/06-19:54:58.260 b38c Level-0 table #11: 96379 bytes OK
+2026/01/06-19:54:58.281 b38c Delete type=0 #8
+2026/01/06-19:55:07.543 b38c Level-0 table #13: started
+2026/01/06-19:55:07.589 b38c Level-0 table #13: 136511 bytes OK
+2026/01/06-19:55:07.619 b38c Delete type=0 #10
+2026/01/06-19:57:58.241 b38c Level-0 table #15: started
+2026/01/06-19:57:58.253 b38c Level-0 table #15: 137682 bytes OK
+2026/01/06-19:57:58.263 b38c Delete type=0 #12
+2026/01/06-19:57:58.264 b38c Compacting 4@0 + 1@1 files
+2026/01/06-19:57:58.289 b38c Generated table #16@0: 27 keys, 271504 bytes
+2026/01/06-19:57:58.289 b38c Compacted 4@0 + 1@1 files => 271504 bytes
+2026/01/06-19:57:58.298 b38c compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/01/06-19:57:58.299 b38c Delete type=2 #7
+2026/01/06-19:57:58.300 b38c Delete type=2 #9
+2026/01/06-19:57:58.300 b38c Delete type=2 #11
+2026/01/06-19:57:58.300 b38c Delete type=2 #13
+2026/01/06-19:57:58.300 b38c Delete type=2 #15

@@ -1,0 +1,27 @@
+2026/01/06-19:35:46.143 6824 Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-1\Default\Session Storage/MANIFEST-000001
+2026/01/06-19:35:46.143 6824 Recovering log #18
+2026/01/06-19:35:46.144 6824 Reusing old log d:\WEBSITE\Caodulieu\.browser-data\worker-1\Default\Session Storage/000018.log 
+2026/01/06-19:40:54.074 9bf0 Level-0 table #22: started
+2026/01/06-19:40:54.092 9bf0 Level-0 table #22: 26469 bytes OK
+2026/01/06-19:40:54.113 9bf0 Delete type=0 #18
+2026/01/06-19:45:41.845 9bf0 Level-0 table #24: started
+2026/01/06-19:45:41.862 9bf0 Level-0 table #24: 26395 bytes OK
+2026/01/06-19:45:41.873 9bf0 Delete type=0 #21
+2026/01/06-19:49:43.977 9bf0 Level-0 table #26: started
+2026/01/06-19:49:43.997 9bf0 Level-0 table #26: 31637 bytes OK
+2026/01/06-19:49:44.006 9bf0 Delete type=0 #23
+2026/01/06-19:49:44.007 9bf0 Compacting 4@0 + 1@1 files
+2026/01/06-19:49:44.019 9bf0 Generated table #27@0: 71 keys, 7161 bytes
+2026/01/06-19:49:44.019 9bf0 Compacted 4@0 + 1@1 files => 7161 bytes
+2026/01/06-19:49:44.028 9bf0 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/01/06-19:49:44.029 9bf0 Delete type=2 #17
+2026/01/06-19:49:44.029 9bf0 Delete type=2 #19
+2026/01/06-19:49:44.029 9bf0 Delete type=2 #22
+2026/01/06-19:49:44.029 9bf0 Delete type=2 #24
+2026/01/06-19:49:44.029 9bf0 Delete type=2 #26
+2026/01/06-19:54:55.682 9bf0 Level-0 table #29: started
+2026/01/06-19:54:55.703 9bf0 Level-0 table #29: 28876 bytes OK
+2026/01/06-19:54:55.724 9bf0 Delete type=0 #25
+2026/01/06-19:58:15.216 6824 Level-0 table #31: started
+2026/01/06-19:58:15.256 6824 Level-0 table #31: 27889 bytes OK
+2026/01/06-19:58:15.266 6824 Delete type=0 #28
