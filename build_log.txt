@@ -1,0 +1,102 @@
+
+> ecommerce-spider@0.1.0 build
+> next build
+
+ΓÜá `eslint` configuration in next.config.ts is no longer supported. See more info here: https://nextjs.org/docs/app/api-reference/cli/next#next-lint-options
+ΓÜá Invalid next.config.ts options detected: 
+ΓÜá     Unrecognized key(s) in object: 'eslint'
+ΓÜá See more info here: https://nextjs.org/docs/messages/invalid-next-config
+Γû▓ Next.js 16.1.1 (Turbopack)
+- Environments: .env.local
+- Experiments (use with caution):
+  ┬╖ serverActions
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 4.6s
+  Skipping validation of types
+  Collecting page data using 15 workers ...
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: Γ£à audit secrets and track compliance: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒùé∩╕Å backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöÉ encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: Γ£à audit secrets and track compliance: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+[2026-01-07T15:03:59.146Z] [INFO] Γ£à Embedding service initialized with model: BAAI/bge-base-en-v1.5 
+[2026-01-07T15:03:59.147Z] [INFO] ≡ƒöÑ Warming up embedding model... 
+[2026-01-07T15:03:59.150Z] [INFO] Γ£à Embedding service initialized with model: BAAI/bge-base-en-v1.5 
+[2026-01-07T15:03:59.152Z] [INFO] ≡ƒöÑ Warming up embedding model... 
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ΓÜÖ∩╕Å  enable debug logging with { debug: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  suppress all logs with { quiet: true }
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: Γ£à audit secrets and track compliance: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöÉ prevent committing .env to code: https://dotenvx.com/precommit
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöÉ encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒ¢á∩╕Å  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  write to custom object with { processEnv: myObject }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒöä add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöä add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒùé∩╕Å backup and recover secrets: https://dotenvx.com/ops
+[2026-01-07T15:03:59.178Z] [INFO] Γ£à Embedding service initialized with model: BAAI/bge-base-en-v1.5 
+[2026-01-07T15:03:59.179Z] [INFO] ≡ƒöÑ Warming up embedding model... 
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöÉ prevent committing .env to code: https://dotenvx.com/precommit
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒùé∩╕Å backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöÉ prevent committing .env to code: https://dotenvx.com/precommit
+[dotenv@17.2.3] injecting env (0) from .env -- tip: Γ£à audit secrets and track compliance: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒ¢á∩╕Å  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒæÑ sync secrets across teammates & machines: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöä add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöÉ prevent committing .env to code: https://dotenvx.com/precommit
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒöä add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒ¢á∩╕Å  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.3] injecting env (0) from .env -- tip: Γ£à audit secrets and track compliance: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ΓÜÖ∩╕Å  enable debug logging with { debug: true }
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒùé∩╕Å backup and recover secrets: https://dotenvx.com/ops
+  Generating static pages using 15 workers (0/22) ...
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ≡ƒöæ add access controls to secrets: https://dotenvx.com/ops
+  Generating static pages using 15 workers (5/22) 
+[2026-01-07T15:03:59.879Z] [INFO] Γ£à Embedding service initialized with model: BAAI/bge-base-en-v1.5 
+[2026-01-07T15:03:59.880Z] [INFO] ≡ƒöÑ Warming up embedding model... 
+  Generating static pages using 15 workers (10/22) 
+  Generating static pages using 15 workers (16/22) 
+Γ£ô Generating static pages using 15 workers (22/22) in 471.6ms
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ Γùï /admin
+Γö£ Γùï /admin/canonical-products
+Γö£ ╞Æ /admin/canonical-products/[id]
+Γö£ Γùï /admin/crawl
+Γö£ Γùï /admin/raw-products
+Γö£ ╞Æ /admin/raw-products/[id]
+Γö£ ╞Æ /api/admin/canonical-products
+Γö£ ╞Æ /api/admin/canonical-products/[id]
+Γö£ ╞Æ /api/admin/crawl
+Γö£ ╞Æ /api/admin/crawl/control
+Γö£ ╞Æ /api/admin/crawl/history
+Γö£ ╞Æ /api/admin/deduplicate
+Γö£ ╞Æ /api/admin/deduplicate/matrix
+Γö£ ╞Æ /api/admin/deduplicate/status
+Γö£ ╞Æ /api/admin/raw-products
+Γö£ ╞Æ /api/admin/raw-products/[id]
+Γö£ ╞Æ /api/admin/stats
+Γö£ ╞Æ /api/admin/system
+Γö£ ╞Æ /api/alerts
+Γö£ ╞Æ /api/homepage
+Γö£ ╞Æ /api/products/[id]
+Γö£ ╞Æ /api/products/raw/[id]
+Γö£ ╞Æ /api/search
+Γö£ ╞Æ /api/search/suggestions
+Γö£ ╞Æ /products/[id]
+Γöö Γùï /search
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

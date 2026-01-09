@@ -90,10 +90,10 @@ export class AdaptiveThresholdManager {
         const lowerCat = category.toLowerCase();
 
         const categoryMap: Record<string, string[]> = {
+            audio: ['tai nghe', 'headphone', 'earphone', 'airpods', 'speaker', 'loa'],
             phone: ['điện thoại', 'mobile', 'smartphone', 'phone'],
             laptop: ['laptop', 'máy tính xách tay', 'macbook', 'notebook'],
             tablet: ['tablet', 'máy tính bảng', 'ipad'],
-            audio: ['tai nghe', 'headphone', 'earphone', 'airpods', 'speaker', 'loa'],
             watch: ['đồng hồ', 'smartwatch', 'watch', 'apple watch'],
             tv: ['tivi', 'tv', 'television', 'smart tv'],
             appliance: ['tủ lạnh', 'máy giặt', 'điều hòa', 'fridge', 'washer', 'ac'],

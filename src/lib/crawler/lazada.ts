@@ -7,7 +7,7 @@ import { Page } from 'puppeteer';
 import { PuppeteerCrawlerBase, PuppeteerCrawlOptions } from './puppeteerBase';
 import { CrawledProduct } from './base';
 import { KeywordService } from './keywordService';
-import { CategoryService } from './categoryService';
+import { CategoryService, CategoryNode } from './categoryService';
 import logger from '../utils/logger';
 
 interface LazadaProduct {
@@ -28,8 +28,9 @@ interface LazadaProduct {
     itemSoldCntShow?: string;
 }
 
-// Lazada categories for mass crawl targeting 3k/day
+// Lazada categories for mass crawl - COMPREHENSIVE LIST
 const LAZADA_CATEGORIES = [
+    // Electronics
     { slug: 'dien-thoai-di-dong', name: 'Điện thoại' },
     { slug: 'may-tinh-bang', name: 'Máy tính bảng' },
     { slug: 'laptop', name: 'Laptop' },
@@ -37,15 +38,32 @@ const LAZADA_CATEGORIES = [
     { slug: 'linh-kien-may-tinh', name: 'Linh kiện máy tính' },
     { slug: 'tivi', name: 'Tivi' },
     { slug: 'thiet-bi-am-thanh', name: 'Thiết bị âm thanh' },
-    { slug: 'do-gia-dung-dien-tu', name: 'Đồ gia dụng điện tử' },
-    { slug: 'phu-kien-dien-thoai', name: 'Phụ kiện điện thoại' },
     { slug: 'may-anh-may-quay-phim', name: 'Máy ảnh' },
     { slug: 'thiet-bi-deo-thong-minh', name: 'Đồng hồ thông minh' },
+    { slug: 'phu-kien-dien-thoai', name: 'Phụ kiện điện thoại' },
+    { slug: 'tai-nghe', name: 'Tai nghe' },
+    { slug: 'loa-bluetooth', name: 'Loa Bluetooth' },
+    // Home Appliances
+    { slug: 'do-gia-dung-dien-tu', name: 'Đồ gia dụng điện tử' },
     { slug: 'tu-lanh', name: 'Tủ lạnh' },
     { slug: 'may-giat', name: 'Máy giặt' },
     { slug: 'dieu-hoa', name: 'Điều hòa' },
     { slug: 'may-loc-khong-khi', name: 'Máy lọc không khí' },
     { slug: 'may-loc-nuoc', name: 'Máy lọc nước' },
+    { slug: 'noi-com-dien', name: 'Nồi cơm điện' },
+    { slug: 'noi-chien-khong-dau', name: 'Nồi chiên không dầu' },
+    { slug: 'lo-vi-song', name: 'Lò vi sóng' },
+    { slug: 'may-hut-bui', name: 'Máy hút bụi' },
+    { slug: 'robot-hut-bui', name: 'Robot hút bụi' },
+    // Gaming
+    { slug: 'may-choi-game', name: 'Máy chơi game' },
+    { slug: 'gaming-gear', name: 'Gaming Gear' },
+    // Camera & Security
+    { slug: 'camera-an-ninh', name: 'Camera an ninh' },
+    // Small appliances
+    { slug: 'may-say-toc', name: 'Máy sấy tóc' },
+    { slug: 'ban-ui', name: 'Bàn ủi' },
+    { slug: 'quat-dien', name: 'Quạt điện' },
 ];
 
 const LAZADA_KEYWORDS = [
@@ -442,12 +460,12 @@ export class LazadaCrawler extends PuppeteerCrawlerBase {
     }
 
     /**
-     * Mass crawl - Uses categories + keywords from database
+     * Mass crawl - ENHANCED with Smart Auto-Skip
      */
     async massCrawl(options: { pagesPerCategory?: number } = {}): Promise<CrawledProduct[]> {
         await this.initialize();
 
-        const pagesPerCat = options.pagesPerCategory || 20;
+        const pagesPerCat = options.pagesPerCategory || 50;
         const allProducts: CrawledProduct[] = [];
 
         // We will create individual logs for categories, and one "keyword session" log for keywords
@@ -455,21 +473,66 @@ export class LazadaCrawler extends PuppeteerCrawlerBase {
         let totalSaved = 0;
         const logId = await this.createCrawlLog();
 
-        // Fetch categories from database with 24h freshness check
-        const dbCategories = await CategoryService.getCategories(this.sourceId, 24);
-        const categories = dbCategories.length > 0
-            ? dbCategories.map(cat => ({
+        // Import CrawlProgressService for smart tracking
+        const { CrawlProgressService } = await import('./crawlProgressService');
+
+        // 🌳 PHASE 1: Fetch category tree from CategoryService
+        logger.info('[Lazada] 🌳 Fetching category tree...');
+        const categoryTree = await CategoryService.fetchLazadaCategoryTree();
+        const leafCategories = CategoryService.getLeafCategories(categoryTree);
+        const allCategoriesFromTree = CategoryService.flattenCategories(categoryTree);
+
+        // Prioritize leaf categories (more specific)
+        let categories = [...leafCategories, ...allCategoriesFromTree.filter(c => c.level === 0)]
+            .map((cat: CategoryNode) => ({
                 id: cat.id,
                 name: cat.name,
-                slug: CategoryService.getSourceSlug(cat, 'lazada')
-            }))
-            : LAZADA_CATEGORIES.map(cat => ({ ...cat, id: undefined }));
+                slug: String(cat.slug || cat.id)
+            }));
+
+        // Remove duplicates
+        const seenSlugs = new Set<string>();
+        categories = categories.filter(c => {
+            if (seenSlugs.has(c.slug)) return false;
+            seenSlugs.add(c.slug);
+            return true;
+        });
+
+        logger.info(`[Lazada] 📂 ${categories.length} unique categories after deduplication`);
+
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled categories
+        logger.info(`[Lazada] 🔍 Checking uncrawled categories for sourceId: ${this.sourceId}`);
+        let uncrawledCategories: { id: string | number; name: string; slug?: string }[] = [];
+        try {
+            uncrawledCategories = await CrawlProgressService.getUncrawledCategories(
+                this.sourceId,
+                categories.map(c => ({ id: c.id, name: c.name, slug: c.slug })),
+                24
+            );
+            logger.info(`[Lazada] ✅ Uncrawled categories check complete: ${uncrawledCategories.length}`);
+        } catch (err) {
+            logger.error(`[Lazada] ❌ Failed to check uncrawled categories:`, err);
+            uncrawledCategories = categories;
+        }
+
+        if (uncrawledCategories.length > 0) {
+            const skipped = categories.length - uncrawledCategories.length;
+            categories = uncrawledCategories.map(c => ({ id: c.id, name: c.name, slug: c.slug || String(c.id) }));
+            logger.info(`[Lazada] ⏭️ SMART SKIP: ${skipped} categories already crawled, ${categories.length} remaining`);
+        }
 
         // Fetch keywords from database (ONLY older than 24h)
         const dbKeywords = await KeywordService.getKeywordStrings('lazada', undefined, 24);
-        const keywords = dbKeywords.length > 0 ? dbKeywords : LAZADA_KEYWORDS;
+        let keywords = dbKeywords.length > 0 ? dbKeywords : LAZADA_KEYWORDS;
 
-        logger.info(`🚀 [Lazada] MASS CRAWL: ${categories.length} categories + ${keywords.length} keywords (Source: Database)`);
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled keywords
+        const uncrawledKeywords = await CrawlProgressService.getUncrawledKeywords(this.sourceId, keywords, 24);
+        if (uncrawledKeywords.length > 0) {
+            keywords = uncrawledKeywords;
+            logger.info(`[Lazada] ⏭️ SMART SKIP: ${keywords.length} uncrawled keywords`);
+        }
+
+        logger.info(`🚀 [Lazada] MASS CRAWL: ${categories.length} categories + ${keywords.length} keywords`);
 
         try {
             const page = await this.getPage();

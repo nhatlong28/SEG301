@@ -8,7 +8,7 @@ import { Page, Browser, HTTPResponse } from 'puppeteer';
 import { PuppeteerCrawlerBase, PuppeteerCrawlOptions } from './puppeteerBase';
 import { CrawledProduct } from './base';
 import { KeywordService } from './keywordService';
-import { CategoryService } from './categoryService';
+import { CategoryService, CategoryNode } from './categoryService';
 import logger from '../utils/logger';
 import axios from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
@@ -708,7 +708,7 @@ export class ShopeeCrawler extends PuppeteerCrawlerBase {
     }
 
     /**
-     * Mass crawl - Uses keywords from database
+     * Mass crawl - ENHANCED with Smart Auto-Skip
      */
     async massCrawl(options: { pagesPerCategory?: number } = {}): Promise<CrawledProduct[]> {
         await this.initialize();
@@ -719,19 +719,40 @@ export class ShopeeCrawler extends PuppeteerCrawlerBase {
         let totalErrors = 0;
         let totalSaved = 0;
 
-        // Fetch categories from database with 24h freshness check
-        const dbCategories = await CategoryService.getCategories(this.sourceId, 24);
-        const categoryKeywords = dbCategories.map(cat => cat.name);
+        // Import CrawlProgressService for smart tracking
+        const { CrawlProgressService } = await import('./crawlProgressService');
 
-        // Fetch keywords from database (ONLY older than 24h)
+        // PHASE 1: Fetch category tree from Shopee API
+        logger.info('[Shopee] 🌳 Fetching category tree from API...');
+        const categoryTree = await CategoryService.fetchShopeeCategoryTree();
+        const leafCategories = CategoryService.getLeafCategories(categoryTree);
+
+        // Use category names as keywords for search
+        const categoryKeywords = leafCategories.slice(0, 50).map((c: CategoryNode) => c.name);
+
+        // Fetch additional keywords from database
         const dbKeywords = await KeywordService.getKeywordStrings('shopee', undefined, 24);
-        // Fallback to hardcoded if DB is empty
         const keywords = dbKeywords.length > 0 ? dbKeywords : SHOPEE_KEYWORDS;
 
-        // Combine categories (as keywords) and regular keywords
-        const allTargets = [...new Set([...categoryKeywords, ...keywords])];
+        // Combine categories and keywords
+        let allTargets = [...new Set([...categoryKeywords, ...keywords])];
 
-        logger.info(`🚀 [Shopee] MASS CRAWL: ${categoryKeywords.length} categories + ${keywords.length} keywords -> ${allTargets.length} unique targets (Source: Database)`);
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled keywords
+        const uncrawledKeywords = await CrawlProgressService.getUncrawledKeywords(
+            this.sourceId,
+            allTargets,
+            24 // Skip if crawled within 24h
+        );
+
+        if (uncrawledKeywords.length > 0) {
+            const skipped = allTargets.length - uncrawledKeywords.length;
+            allTargets = uncrawledKeywords;
+            logger.info(`[Shopee] ⏭️ SMART SKIP: ${skipped} keywords already crawled, ${allTargets.length} remaining`);
+        } else {
+            logger.info(`[Shopee] 🔄 All keywords crawled within 24h, re-crawling all...`);
+        }
+
+        logger.info(`🚀 [Shopee] MASS CRAWL: ${allTargets.length} unique targets`);
 
         try {
             for (let i = 0; i < allTargets.length; i++) {

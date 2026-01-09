@@ -1,3 +1,2 @@
-2026/01/06-19:35:46.086 5934 Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-1\Default\Service Worker\Database/MANIFEST-000001
-2026/01/06-19:35:46.087 5934 Recovering log #3
-2026/01/06-19:35:46.087 5934 Reusing old log d:\WEBSITE\Caodulieu\.browser-data\worker-1\Default\Service Worker\Database/000003.log 
+2026/01/08-14:59:23.040 2794 Creating DB d:\WEBSITE\Caodulieu\.browser-data\worker-1\Default\Service Worker\Database since it was missing.
+2026/01/08-14:59:23.456 2794 Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-1\Default\Service Worker\Database/MANIFEST-000001

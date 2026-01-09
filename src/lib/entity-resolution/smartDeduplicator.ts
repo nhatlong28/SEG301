@@ -5,7 +5,11 @@
  */
 
 import { supabaseAdmin } from '@/lib/db/supabase';
+import { Database } from '@/types/database';
 import { MLEntityMatcher, ProductData } from './mlMatcher';
+
+type ProductMappingInsert = Database['public']['Tables']['product_mappings']['Insert'];
+type MatchingPairInsert = Database['public']['Tables']['matching_pairs']['Insert'];
 import { ProductCodeExtractor } from './codeExtractor';
 import { getEmbeddingService } from '../search/embeddingService';
 import { SmartBlockingStrategy } from './smartBlocking';
@@ -16,6 +20,13 @@ import { ManualReviewQueue } from './reviewQueue';
 import { CanonicalHistoryTracker } from './historyTracker';
 import { AdaptiveThresholdManager } from './adaptiveThresholds';
 import logger from '@/lib/utils/logger';
+import PQueue from 'p-queue';
+
+// Batch configuration
+const BATCH_CONFIG = {
+    CONCURRENCY: 20, // Max concurrent promises
+    INSERT_CHUNK_SIZE: 100, // DB bulk insert size
+};
 
 // ===================== TYPES =====================
 
@@ -164,7 +175,8 @@ export class SmartDeduplicator {
     // ===================== JOB MANAGEMENT =====================
 
     private async loadSources(): Promise<void> {
-        const { data } = await supabaseAdmin
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabaseAdmin as any)
             .from('sources')
             .select('id, name, type')
             .eq('is_active', true);
@@ -182,7 +194,8 @@ export class SmartDeduplicator {
     }
 
     private async createJob(mode: DeduplicationMode): Promise<void> {
-        const { count } = await supabaseAdmin
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { count } = await (supabaseAdmin as any)
             .from('raw_products')
             .select('*', { count: 'exact', head: true });
 
@@ -203,8 +216,9 @@ export class SmartDeduplicator {
             throw error;
         }
 
-        this.currentJobId = data.id;
-        this.progress.jobId = data.id;
+        const job = data as { id: number };
+        this.currentJobId = job.id;
+        this.progress.jobId = job.id;
         this.progress.totalProducts = count || 0;
         this.progress.totalBatches = Math.ceil((count || 0) / 500);
 
@@ -267,9 +281,12 @@ export class SmartDeduplicator {
         logger.info('🧹 Fresh mode: Cleaning up existing canonical data...');
         await this.updateJobPhase('init');
 
-        await supabaseAdmin.from('matching_pairs').delete().neq('id', 0);
-        await supabaseAdmin.from('product_mappings').delete().neq('id', 0);
-        await supabaseAdmin.from('canonical_products').delete().neq('id', 0);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabaseAdmin as any).from('matching_pairs').delete().neq('id', 0);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabaseAdmin as any).from('product_mappings').delete().neq('id', 0);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabaseAdmin as any).from('canonical_products').delete().neq('id', 0);
 
         // Reset dedup status
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -294,7 +311,8 @@ export class SmartDeduplicator {
         const statusFilter = mode === 'incremental' ? 'pending' : undefined;
 
         // Get total count for this run
-        let totalQuery = supabaseAdmin
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let totalQuery = (supabaseAdmin as any)
             .from('raw_products')
             .select('*', { count: 'exact', head: true });
 
@@ -313,7 +331,8 @@ export class SmartDeduplicator {
             await this.updateJobPhase('clustering');
 
             // Fetch batch
-            let query = supabaseAdmin
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let query = (supabaseAdmin as any)
                 .from('raw_products')
                 .select('id, source_id, external_id, name, name_normalized, brand_raw, category_raw, price, rating, specs, review_count, available, image_url, description, images')
                 .range(offset, offset + batchSize - 1)
@@ -417,131 +436,150 @@ export class SmartDeduplicator {
 
         logger.info(`🔍 Cross-source matching: ${singleSourceCanonicals.length} single-source canonicals (minScore: ${minMatchScore})`);
 
-        // For each single-source canonical, find potential matches from other sources
-        for (let i = 0; i < singleSourceCanonicals.length; i++) {
-            const canonical = singleSourceCanonicals[i];
+        const queue = new PQueue({ concurrency: BATCH_CONFIG.CONCURRENCY });
+        const pendingMappings: ProductMappingInsert[] = [];
+        const pendingPairs: MatchingPairInsert[] = [];
+        let processedCount = 0;
 
-            // Get current source of this canonical
+        // Function to flush pending writes
+        const flushPendingWrites = async () => {
+            if (pendingMappings.length === 0) return;
+
+            const mappingsToInsert = [...pendingMappings];
+            const pairsToInsert = [...pendingPairs];
+            pendingMappings.length = 0;
+            pendingPairs.length = 0;
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: currentMappings } = await (supabaseAdmin as any)
-                .from('product_mappings')
-                .select('raw_product_id, raw_products(id, source_id)')
-                .eq('canonical_id', canonical.id)
-                .limit(1);
+            const { error: mapErr } = await (supabaseAdmin as any).from('product_mappings').insert(mappingsToInsert);
+            if (mapErr) logger.error('Failed to flush mappings:', mapErr);
 
-            const currentSourceId = currentMappings?.[0]?.raw_products?.source_id;
-            const currentRawProductId = currentMappings?.[0]?.raw_products?.id;
-
-            if (!currentSourceId) {
-                if (i < 5) logger.debug(`[CrossMatch] Skip canonical ${canonical.id}: no source mapping found`);
-                continue;
-            }
-
-            // Extract product code from canonical name
-            const canonicalCode = this.extractor.extract(canonical.name);
-
-            // Log first few extractions for debugging
-            if (i < 5) {
-                logger.info(`[CrossMatch] #${i + 1} "${canonical.name.substring(0, 50)}..." → brand:${canonicalCode.brand || 'null'} model:${canonicalCode.model || 'null'} storage:${canonicalCode.storage || 'null'}`);
-            }
-
-            // If no brand or model extracted, skip (can't match reliably)
-            if (!canonicalCode.brand && !canonicalCode.model) {
-                if (i < 5) logger.debug(`[CrossMatch] Skip: no extractable info`);
-                continue;
-            }
-
-            // Build smarter search queries based on extracted code
-            const searchTerms: string[] = [];
-
-            // Primary search: use model (most reliable)
-            if (canonicalCode.model) {
-                // Extract key model info: e.g., "iPhone 17 Pro" → search for "iphone%17%pro"
-                const modelParts = canonicalCode.model.toLowerCase().split(/\s+/).filter(p => p.length > 1);
-                if (modelParts.length >= 2) {
-                    searchTerms.push(`%${modelParts.join('%')}%`);
-                }
-            }
-
-            // Secondary search: brand + storage
-            if (canonicalCode.brand && canonicalCode.storage) {
-                searchTerms.push(`%${canonicalCode.brand}%${canonicalCode.storage.replace('GB', '')}%`);
-            }
-
-            // Tertiary: just use first 20 chars of name_normalized
-            searchTerms.push(`%${(canonical.name_normalized || canonical.name).toLowerCase().substring(0, 20)}%`);
-
-            let candidates: Array<{
-                id: number;
-                source_id: number;
-                external_id: string;
-                name: string;
-                name_normalized?: string;
-                brand_raw?: string;
-                price?: number;
-                rating?: number;
-            }> = [];
-
-            // Try each search term until we find candidates
-            for (const searchTerm of searchTerms) {
+            if (pairsToInsert.length > 0) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { data: found } = await (supabaseAdmin as any)
-                    .from('raw_products')
-                    .select('id, source_id, external_id, name, name_normalized, brand_raw, price, rating')
-                    .neq('source_id', currentSourceId)
-                    .ilike('name_normalized', searchTerm)
-                    .limit(30);
-
-                if (found?.length) {
-                    candidates = found;
-                    if (i < 5) logger.info(`[CrossMatch] Found ${found.length} candidates with term: "${searchTerm.substring(0, 30)}..."`);
-                    break;
-                }
+                await (supabaseAdmin as any).from('matching_pairs').insert(pairsToInsert);
             }
+        };
 
-            if (!candidates?.length) {
-                if (i < 5) logger.debug(`[CrossMatch] No candidates found for "${canonical.name.substring(0, 30)}..."`);
-                continue;
-            }
+        // For each single-source canonical, add task to queue
+        for (let i = 0; i < singleSourceCanonicals.length; i++) {
+            queue.add(async () => {
+                const canonical = singleSourceCanonicals[i];
 
-            totalCandidatesFound += candidates.length;
-
-            // Score each candidate
-            for (const candidate of candidates) {
-                totalScored++;
-                const candidateCode = this.extractor.extract(candidate.name);
-                const codeMatch = this.extractor.compareExtractedCodes(canonicalCode, candidateCode);
-
-                if (i < 5 && candidates.indexOf(candidate) < 3) {
-                    logger.debug(`[CrossMatch] Scoring: "${candidate.name.substring(0, 30)}..." → score: ${codeMatch.toFixed(2)} (need ≥${minMatchScore})`);
-                }
-
-                // Check if already mapped
+                // Get current source of this canonical
+                // optimization: Could be batched too, but let's rely on concurrency for now
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { data: existingMapping } = await (supabaseAdmin as any)
+                const { data: currentMappings } = await (supabaseAdmin as any)
                     .from('product_mappings')
-                    .select('id')
-                    .eq('raw_product_id', candidate.id)
+                    .select('raw_product_id, raw_products(id, source_id, price)')
+                    .eq('canonical_id', canonical.id)
                     .limit(1);
 
-                if (existingMapping?.length) continue; // Already mapped
+                const currentSourceId = currentMappings?.[0]?.raw_products?.source_id;
+                const currentRawProductId = currentMappings?.[0]?.raw_products?.id;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const currentPrice = (currentMappings?.[0]?.raw_products as any)?.price;
 
-                // If good match, add mapping
-                if (codeMatch >= minMatchScore) {
-                    totalPassed++;
+                if (!currentSourceId) return;
+
+                // Extract product code from canonical name
+                const canonicalCode = this.extractor.extract(canonical.name);
+
+                // If no brand or model extracted, skip (can't match reliably)
+                if (!canonicalCode.brand && !canonicalCode.model) return;
+
+                // Build smarter search queries based on extracted code
+                const searchTerms: string[] = [];
+
+                // Primary search: use model (most reliable)
+                if (canonicalCode.model) {
+                    const modelParts = canonicalCode.model.toLowerCase().split(/\s+/).filter(p => p.length > 1);
+                    if (modelParts.length >= 2) {
+                        searchTerms.push(`%${modelParts.join('%')}%`);
+                    }
+                }
+
+                // Secondary search: brand + storage
+                if (canonicalCode.brand && canonicalCode.storage) {
+                    searchTerms.push(`%${canonicalCode.brand}%${canonicalCode.storage.replace('GB', '')}%`);
+                }
+
+                // Tertiary search
+                searchTerms.push(`%${(canonical.name_normalized || canonical.name).toLowerCase().substring(0, 20)}%`);
+
+                let candidates: any[] = [];
+
+                // Try each search term until we find candidates
+                for (const searchTerm of searchTerms) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const { error } = await (supabaseAdmin as any)
-                        .from('product_mappings')
-                        .insert({
+                    const { data: found } = await (supabaseAdmin as any)
+                        .from('raw_products')
+                        .select('id, source_id, external_id, name, name_normalized, brand_raw, price, rating')
+                        .neq('source_id', currentSourceId)
+                        .ilike('name_normalized', searchTerm)
+                        .limit(20); // Reduced limit for speed
+
+                    if (found?.length) {
+                        candidates = found;
+                        break;
+                    }
+                }
+
+                if (!candidates?.length) return;
+
+                totalCandidatesFound += candidates.length;
+
+                // Score each candidate logic
+                for (const candidate of candidates) {
+                    totalScored++;
+
+                    // 1. Strict Price Sanity Check
+                    if (currentPrice && candidate.price) {
+                        const p1 = Number(currentPrice);
+                        const p2 = Number(candidate.price);
+                        if (p1 > 0 && p2 > 0) {
+                            const ratio = p1 > p2 ? p1 / p2 : p2 / p1;
+                            // Limit price variance to 50% (1.5x)
+                            // This filters out "Phone" (30m) vs "Screen" (500k) matches that might slip through type checks
+                            if (ratio > 1.5) {
+                                continue;
+                            }
+                        }
+                    }
+
+                    // 2. Code Extraction Check (Now includes Type Mismatch Guard)
+                    const candidateCode = this.extractor.extract(candidate.name);
+                    const codeMatch = this.extractor.compareExtractedCodes(canonicalCode, candidateCode);
+
+                    if (codeMatch >= minMatchScore) {
+                        // secondary check: IF we have prices available (candidate has it), and we can get a proxy price?
+                        // If candidate is "Accessory" but Canonical Name suggests "Device", codeMatch should have failed already due to my CodeExtractor fix.
+
+                        // Let's trust the CodeMatcher's new Type Check for now as the primary guardrail.
+                        // And explicitly check if price is available on candidate, is it reasonably high?
+                        // If "iPhone" (canonical) and price is 50k -> Suspicious.
+
+                        // Check if already mapped
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const { data: existingMapping } = await (supabaseAdmin as any)
+                            .from('product_mappings')
+                            .select('id')
+                            .eq('raw_product_id', candidate.id)
+                            .limit(1);
+
+                        if (existingMapping?.length) continue;
+
+                        totalPassed++;
+                        mappingsCreated++;
+                        this.progress.matchesFound++;
+
+                        // Add to pending batch
+                        pendingMappings.push({
                             canonical_id: canonical.id,
                             raw_product_id: candidate.id,
                             confidence_score: codeMatch,
                             matching_method: 'cross_source',
+                            is_verified: false,
                         });
-
-                    if (!error) {
-                        mappingsCreated++;
-                        this.progress.matchesFound++;
 
                         // Record cross-source matrix
                         const sourceName1 = this.getSourceName(currentSourceId);
@@ -551,9 +589,7 @@ export class SmartDeduplicator {
                             this.crossSourceMatrix[sourceName2][sourceName1]++;
                         }
 
-                        // Record matching pair
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        await (supabaseAdmin as any).from('matching_pairs').insert({
+                        pendingPairs.push({
                             job_id: this.currentJobId,
                             raw_product_1: currentRawProductId || 0,
                             raw_product_2: candidate.id,
@@ -564,18 +600,25 @@ export class SmartDeduplicator {
                             canonical_id: canonical.id,
                         });
 
-                        logger.info(`✓ MATCH: "${canonical.name.substring(0, 30)}..." ↔ "${candidate.name.substring(0, 30)}..." (${codeMatch.toFixed(2)})`);
-                    } else {
-                        logger.error(`Failed to create mapping: ${JSON.stringify(error)}`);
+                        // Small flush if buffer gets too big
+                        if (pendingMappings.length >= BATCH_CONFIG.INSERT_CHUNK_SIZE) {
+                            await flushPendingWrites();
+                        }
                     }
                 }
-            }
 
-            // Log progress every 100 canonicals
-            if (i > 0 && i % 100 === 0) {
-                logger.info(`[CrossMatch] Progress: ${i}/${singleSourceCanonicals.length} canonicals, ${mappingsCreated} matches found`);
-            }
+                processedCount++;
+                if (processedCount % 100 === 0) {
+                    logger.info(`[CrossMatch] Processed ${processedCount}/${singleSourceCanonicals.length}`);
+                }
+            });
         }
+
+        // Wait for all tasks to complete
+        await queue.onIdle();
+
+        // Final flush
+        await flushPendingWrites();
 
         // Final statistics
         logger.info(`📊 Cross-source matching complete:`);
@@ -640,122 +683,133 @@ export class SmartDeduplicator {
         // Group by smart blocking key
         const groups = this.groupProducts(dedupedProducts as unknown as RawProduct[]);
 
+        // PQueue for parallel group processing
+        const queue = new PQueue({ concurrency: BATCH_CONFIG.CONCURRENCY });
+
         for (const [groupKey, groupProducts] of groups) {
-            // Track source info
-            for (const p of groupProducts) {
-                const sourceName = this.getSourceName(p.source_id);
-                if (!this.progress.sourceBreakdown[sourceName]) {
-                    this.progress.sourceBreakdown[sourceName] = { processed: 0, matched: 0 };
-                }
-                this.progress.sourceBreakdown[sourceName].processed++;
-            }
-
-            // Create ProductData with embeddings
-            const productData: ProductData[] = groupProducts.map(p => {
-                const originalIndex = dedupedProducts.findIndex(origP => origP.id === p.id);
-                const embedding = originalIndex !== -1 ? embeddings[originalIndex] : undefined;
-
-                return {
-                    externalId: p.external_id,
-                    sourceId: p.source_id,
-                    name: p.name,
-                    brand: p.brand_raw,
-                    category: p.category_raw,
-                    price: p.price,
-                    rating: p.rating,
-                    specs: p.specs as Record<string, string>,
-                    embedding: embedding || undefined,
-                };
-            });
-
-            // Cluster products
-            // Gap 9: Use Adaptive Thresholds based on category
-            const category = groupProducts[0].category_raw;
-            const dynamicThreshold = await this.thresholdManager.getThreshold(category);
-            const clusters = await this.matcher.clusterProducts(productData, Math.max(minMatchScore, dynamicThreshold));
-
-            // Process each cluster
-            for (const cluster of clusters) {
-                if (cluster.length === 0) continue;
-
-                // Gap 3 Fix: Handle variants within the cluster
-                const variantResult = this.variantManager.handleVariants(
-                    groupProducts.filter(p => cluster.some(c => c.externalId === p.external_id))
-                );
-
-                // Track cross-source matches
-                this.recordCrossSourceMatches(cluster);
-
-                // Check for existing canonical
-                const existingCanonical = await this.findExistingCanonical(cluster[0]);
-
-                if (existingCanonical) {
-                    const newMappings = await this.addMappingsToCanonical(
-                        existingCanonical.id,
-                        cluster,
-                        groupProducts
-                    );
-                    mappingsCreated += newMappings;
-
-                    // Gap 8: Track history of updates
-                    await this.historyTracker.trackChange(
-                        existingCanonical.id,
-                        'updated',
-                        {
-                            job_id: { old: null, new: this.currentJobId },
-                            new_mappings: { old: 0, new: cluster.length }
-                        },
-                        'auto_dedup'
-                    );
-
-                    // Record match pairs
-                    if (cluster.length > 1) {
-                        await this.recordMatchingPairs(cluster, existingCanonical.id, groupProducts);
+            queue.add(async () => {
+                // Track source info
+                for (const p of groupProducts) {
+                    const sourceName = this.getSourceName(p.source_id);
+                    if (!this.progress.sourceBreakdown[sourceName]) {
+                        this.progress.sourceBreakdown[sourceName] = { processed: 0, matched: 0 };
                     }
-                } else {
-                    // Gap 6: Use Quality Scorer to select best product
-                    const bestProduct = this.selectBestProduct(cluster, groupProducts);
-                    const canonical = await this.createCanonical(bestProduct, cluster, groupProducts);
+                    this.progress.sourceBreakdown[sourceName].processed++;
+                }
 
-                    if (canonical) {
-                        canonicalCreated++;
-                        mappingsCreated += cluster.length;
+                // Create ProductData with embeddings
+                const productData: ProductData[] = groupProducts.map(p => {
+                    const originalIndex = dedupedProducts.findIndex(origP => origP.id === p.id);
+                    const embedding = originalIndex !== -1 ? embeddings[originalIndex] : undefined;
 
-                        // Gap 3: Save variant info if detected
-                        if (variantResult.isVariantGroup) {
-                            await this.variantManager.saveVariants(canonical.id, variantResult.variants);
-                        }
+                    return {
+                        externalId: p.external_id,
+                        sourceId: p.source_id,
+                        name: p.name,
+                        brand: p.brand_raw,
+                        category: p.category_raw,
+                        price: p.price,
+                        rating: p.rating,
+                        specs: p.specs as Record<string, string>,
+                        embedding: embedding || undefined,
+                    };
+                });
 
-                        // Gap 6: Calculate and store quality score
-                        const quality = this.qualityScorer.calculateQuality(canonical as any, groupProducts as any);
-                        await this.qualityScorer.updateCanonicalQuality(canonical.id, quality);
+                // Cluster products
+                // Gap 9: Use Adaptive Thresholds based on category
+                const category = groupProducts[0].category_raw;
+                const dynamicThreshold = await this.thresholdManager.getThreshold(category);
+                const clusters = await this.matcher.clusterProducts(productData, Math.max(minMatchScore, dynamicThreshold));
 
-                        // Gap 8: Track history of creation
-                        await this.historyTracker.trackCreation(canonical.id, canonical as any);
+                // Process each cluster
+                for (const cluster of clusters) {
+                    if (cluster.length === 0) continue;
+
+                    // Gap 3 Fix: Handle variants within the cluster
+                    const variantResult = this.variantManager.handleVariants(
+                        groupProducts.filter(p => cluster.some(c => c.externalId === p.external_id))
+                    );
+
+                    // Track cross-source matches
+                    this.recordCrossSourceMatches(cluster);
+
+                    // Check for existing canonical
+                    const existingCanonical = await this.findExistingCanonical(cluster[0]);
+
+                    if (existingCanonical) {
+                        const newMappings = await this.addMappingsToCanonical(
+                            existingCanonical.id,
+                            cluster,
+                            groupProducts
+                        );
+                        mappingsCreated += newMappings;
+
+                        // Gap 8: Track history of updates
+                        await this.historyTracker.trackChange(
+                            existingCanonical.id,
+                            'updated',
+                            {
+                                job_id: { old: null, new: this.currentJobId },
+                                new_mappings: { old: 0, new: cluster.length }
+                            },
+                            'auto_dedup'
+                        );
 
                         // Record match pairs
                         if (cluster.length > 1) {
-                            await this.recordMatchingPairs(cluster, canonical.id, groupProducts);
-                            this.addRecentMatch(cluster, groupProducts);
+                            await this.recordMatchingPairs(cluster, existingCanonical.id, groupProducts);
                         }
-                    } else if (cluster.length > 1) {
-                        // Gap 7: If clustering is high confidence but canonical creation failed, 
-                        // could be a candidate for manual review
-                        await this.reviewQueue.queueForReview([{
-                            type: 'ambiguous',
-                            data_json: {
-                                cluster: cluster.map(c => ({ name: c.name, source_id: c.sourceId })),
-                                job_id: this.currentJobId
-                            },
-                            reason: 'Ambiguous cluster - failed to create canonical',
-                            priority: 50
-                        }]);
+                    } else {
+                        // Gap 6: Use Quality Scorer to select best product
+                        const bestProduct = this.selectBestProduct(cluster, groupProducts);
+                        const canonical = await this.createCanonical(bestProduct, cluster, groupProducts);
+
+                        if (canonical) {
+                            canonicalCreated++;
+                            mappingsCreated += cluster.length;
+
+                            // Gap 3: Save variant info if detected
+                            if (variantResult.isVariantGroup) {
+                                await this.variantManager.saveVariants(canonical.id, variantResult.variants);
+                            }
+
+                            // Gap 6: Calculate and store quality score
+                            const quality = this.qualityScorer.calculateQuality(canonical as any, groupProducts as any);
+                            await this.qualityScorer.updateCanonicalQuality(canonical.id, quality);
+
+                            // Gap 8: Track history of creation
+                            await this.historyTracker.trackCreation(canonical.id, canonical as any);
+
+                            // Record match pairs
+                            if (cluster.length > 1) {
+                                await this.recordMatchingPairs(cluster, canonical.id, groupProducts);
+                                this.addRecentMatch(cluster, groupProducts);
+                            }
+                        } else if (cluster.length > 1) {
+                            // Gap 7: If clustering is high confidence but canonical creation failed, 
+                            // could be a candidate for manual review
+                            await this.reviewQueue.queueForReview([{
+                                type: 'ambiguous',
+                                data_json: {
+                                    cluster: cluster.map(c => ({ name: c.name, source_id: c.sourceId })),
+                                    job_id: this.currentJobId
+                                },
+                                reason: 'Ambiguous cluster - failed to create canonical',
+                                priority: 50
+                            }]);
+                        }
                     }
                 }
-            }
+            });
+        }
 
-            // Mark products as processed
-            const productIds = groupProducts.map(p => p.id);
+        // Wait for all groups to be processed
+        await queue.onIdle();
+
+        // Mark products as processed
+        // (Batch update status at the end for all products in this batch)
+        const productIds = dedupedProducts.map(p => p.id);
+        if (productIds.length > 0) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabaseAdmin as any)
                 .from('raw_products')
@@ -846,7 +900,9 @@ export class SmartDeduplicator {
 
             const code = this.extractor.extract(bestProduct.name);
             // Truncate slug to max 200 chars to prevent varchar overflow
-            const rawSlug = this.extractor.toCanonicalCode(code) + '-' + Date.now();
+            // Fix: Add random suffix to prevent collision on high concurrency (Date.now() is not enough)
+            const randomSuffix = Math.random().toString(36).substring(2, 8);
+            const rawSlug = this.extractor.toCanonicalCode(code) + '-' + Date.now() + '-' + randomSuffix;
             const slug = rawSlug.substring(0, 200);
 
             // Truncate ALL string fields to safe lengths

@@ -83,6 +83,8 @@ export interface Database {
                     specs: Json;
                     metadata: Json;
                     hash_name: string | null;
+                    dedup_status: string | null;
+                    last_dedup_at: string | null;
                     crawled_at: string;
                     updated_at: string;
                 };
@@ -128,6 +130,66 @@ export interface Database {
                 };
                 Insert: Omit<Database['public']['Tables']['product_mappings']['Row'], 'id' | 'created_at'>;
                 Update: Partial<Database['public']['Tables']['product_mappings']['Insert']>;
+            };
+            matching_pairs: {
+                Row: {
+                    id: number;
+                    job_id: number | null;
+                    raw_product_1: number;
+                    raw_product_2: number;
+                    source_1: number;
+                    source_2: number;
+                    match_score: number | null;
+                    match_method: string | null;
+                    canonical_id: number | null;
+                    created_at: string;
+                };
+                Insert: Omit<Database['public']['Tables']['matching_pairs']['Row'], 'id' | 'created_at'>;
+                Update: Partial<Database['public']['Tables']['matching_pairs']['Insert']>;
+            };
+            deduplication_jobs: {
+                Row: {
+                    id: number;
+                    status: string;
+                    mode: string;
+                    total_raw: number | null;
+                    processed: number | null;
+                    canonical_created: number | null;
+                    mappings_created: number | null;
+                    source_breakdown: Json | null;
+                    current_phase: string | null;
+                    error_message: string | null;
+                    started_at: string | null;
+                    completed_at: string | null;
+                };
+                Insert: {
+                    id?: number;
+                    status?: string;
+                    mode?: string;
+                    total_raw?: number | null;
+                    processed?: number | null;
+                    canonical_created?: number | null;
+                    mappings_created?: number | null;
+                    source_breakdown?: Json | null;
+                    current_phase?: string | null;
+                    error_message?: string | null;
+                    started_at?: string | null;
+                    completed_at?: string | null;
+                };
+                Update: {
+                    id?: number;
+                    status?: string;
+                    mode?: string;
+                    total_raw?: number | null;
+                    processed?: number | null;
+                    canonical_created?: number | null;
+                    mappings_created?: number | null;
+                    source_breakdown?: Json | null;
+                    current_phase?: string | null;
+                    error_message?: string | null;
+                    started_at?: string | null;
+                    completed_at?: string | null;
+                };
             };
             price_history: {
                 Row: {

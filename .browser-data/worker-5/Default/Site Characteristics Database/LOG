@@ -1,2 +1,3 @@
-2026/01/06-15:20:31.609 5fbc Creating DB d:\WEBSITE\Caodulieu\.browser-data\worker-5\Default\Site Characteristics Database since it was missing.
-2026/01/06-15:20:31.769 5fbc Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-5\Default\Site Characteristics Database/MANIFEST-000001
+2026/01/07-21:33:56.287 b7d0 Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-5\Default\Site Characteristics Database/MANIFEST-000001
+2026/01/07-21:33:56.301 b7d0 Recovering log #3
+2026/01/07-21:33:56.301 b7d0 Reusing old log d:\WEBSITE\Caodulieu\.browser-data\worker-5\Default\Site Characteristics Database/000003.log 

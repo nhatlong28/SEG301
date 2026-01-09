@@ -63,7 +63,7 @@ export class BrowserPool {
     private disableInterception: boolean;
 
     constructor(options: BrowserPoolOptions = {}) {
-        this.maxBrowsers = options.maxBrowsers || 3;
+        this.maxBrowsers = options.maxBrowsers || 10;
         this.headless = options.headless !== false;
         this.proxy = options.proxy;
         this.userDataDir = options.userDataDir || process.env.BROWSER_USER_DATA_DIR;
@@ -137,15 +137,6 @@ export class BrowserPool {
             // Give each browser instance its own subdirectory to prevent profile locking
             const specificDir = browserId ? path.join(this.userDataDir, `worker-${browserId}`) : this.userDataDir;
             launchOptions.userDataDir = specificDir;
-
-            // Try to find Edge if on Windows and using Edge profile
-            if (process.platform === 'win32' && (this.userDataDir.includes('Edge') || specificDir.includes('Edge'))) {
-                const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-                if (fs.existsSync(edgePath)) {
-                    launchOptions.executablePath = edgePath;
-                    logger.info(`[BrowserPool] Using Edge executable at: ${edgePath}`);
-                }
-            }
         }
 
         return launchOptions;
@@ -179,8 +170,8 @@ export class BrowserPool {
     }
 
     /**
-     * Acquire an available browser from the pool
-     */
+    * Acquire an available browser from the pool
+        */
     async acquire(): Promise<Browser> {
         if (this.isShuttingDown) {
             throw new Error('Browser pool is shutting down');

@@ -62,7 +62,7 @@ export class MLEntityMatcher {
                 if (emb1 && emb2) {
                     semanticScore = this.embeddingService.cosineSimilarity(emb1, emb2);
                 }
-            } catch (e) {
+            } catch {
                 logger.warn('Failed to generate semantic embedding for matching');
             }
         }
@@ -163,7 +163,7 @@ export class MLEntityMatcher {
         };
     }
 
-    private getCategoryMatch(cat1?: string, cat2?: string): number {
+    public getCategoryMatch(cat1?: string, cat2?: string): number {
         if (!cat1 || !cat2) return 0.5; // Uncertain
         const c1 = cat1.toLowerCase().trim();
         const c2 = cat2.toLowerCase().trim();
@@ -267,7 +267,7 @@ export class MLEntityMatcher {
         return clusters;
     }
 
-    private getBrandMatch(
+    public getBrandMatch(
         code1: ExtractedCode,
         code2: ExtractedCode,
         brand1?: string,
@@ -290,7 +290,7 @@ export class MLEntityMatcher {
         return 0.5; // Unknown
     }
 
-    private getPriceProximity(price1?: number, price2?: number): number {
+    public getPriceProximity(price1?: number, price2?: number): number {
         if (!price1 || !price2 || price1 <= 0 || price2 <= 0) return 0.5;
 
         const priceDiff = Math.abs(price1 - price2) / Math.max(price1, price2);
@@ -303,7 +303,7 @@ export class MLEntityMatcher {
         return 0;                             // Too different
     }
 
-    private getSpecsMatch(specs1?: Record<string, string>, specs2?: Record<string, string>): number {
+    public getSpecsMatch(specs1?: Record<string, string>, specs2?: Record<string, string>): number {
         if (!specs1 || !specs2) return 0.5;
 
         const keys1 = Object.keys(specs1);
@@ -337,7 +337,7 @@ export class MLEntityMatcher {
         return total > 0 ? matches / total : 0.5;
     }
 
-    private getRatingProximity(rating1?: number, rating2?: number): number {
+    public getRatingProximity(rating1?: number, rating2?: number): number {
         if (!rating1 || !rating2) return 0.5;
 
         const diff = Math.abs(rating1 - rating2);

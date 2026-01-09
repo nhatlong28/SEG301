@@ -105,11 +105,11 @@ export abstract class BaseCrawler {
             }
         );
 
-        // Slower, safer queue for anti-bot bypass
+        // 🚀 TURBO MODE: High concurrency for massive data ingestion
         this.queue = new PQueue({
-            concurrency: 1,
-            interval: 2000, // 2 second between requests
-            intervalCap: this.options.rateLimit,
+            concurrency: 10,  // Tăng từ 1 lên 10
+            interval: 200,    // Giảm từ 2000ms xuống 200ms
+            intervalCap: this.options.rateLimit || 10,
         });
     }
 
@@ -319,7 +319,7 @@ export abstract class BaseCrawler {
 
     /**
      * Save crawled products to database using bulk upsert
-     * Returns: inserted = actually NEW products, updated = existing products that were refreshed
+     * OPTIMIZED: Removed redundant duplicate check - DB handles via ON CONFLICT
      */
     async saveProducts(products: CrawledProduct[]): Promise<{ inserted: number; updated: number }> {
         if (products.length === 0) return { inserted: 0, updated: 0 };
@@ -336,9 +336,8 @@ export abstract class BaseCrawler {
                     brand_raw: product.brand,
                     category_raw: product.category,
                     image_url: product.imageUrl,
-                    // OPTIMIZATION: Don't store full description to save space for 1M records
                     description: product.description ? product.description.substring(0, 200) : undefined,
-                    images: (product.images || []).slice(0, 3), // Only store up to 3 images
+                    images: (product.images || []).slice(0, 3),
                     rating: product.rating,
                     review_count: product.reviewCount || 0,
                     sold_count: product.soldCount || 0,
@@ -356,99 +355,88 @@ export abstract class BaseCrawler {
 
             if (productDataList.length === 0) return { inserted: 0, updated: 0 };
 
-            // Deduplicate based on external_id to prevent "ON CONFLICT" errors within the same batch
+            // Deduplicate within batch based on external_id
             const uniqueProductDataMap = new Map<string, any>();
             for (const item of productDataList) {
-                // Ensure the key is a lean string to avoid matching issues
                 const key = String(item.external_id).trim();
                 uniqueProductDataMap.set(key, item);
             }
             const uniqueProductData = Array.from(uniqueProductDataMap.values());
 
-            // === NEW: Check which products already exist to track new vs updated ===
-            const externalIds = uniqueProductData.map(p => p.external_id);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: existingProducts } = await (supabaseAdmin as any)
-                .from('raw_products')
-                .select('external_id')
-                .eq('source_id', this.sourceId)
-                .in('external_id', externalIds);
-
-            const existingExternalIds = new Set((existingProducts || []).map((p: { external_id: string }) => p.external_id));
-            const actuallyNewCount = uniqueProductData.filter(p => !existingExternalIds.has(p.external_id)).length;
-            // === END NEW ===
-
-            // Batch insert in chunks of 100 to avoid timeout
-            const batchSize = 100;
-            let totalSaved = 0;
+            // Batch insert in smaller chunks (50) to avoid Cloudflare 500 errors
+            const batchSize = 50;
+            let totalInserted = 0;
+            let totalUpdated = 0;
 
             for (let i = 0; i < uniqueProductData.length; i += batchSize) {
                 const batch = uniqueProductData.slice(i, i + batchSize);
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { data, error } = await (supabaseAdmin as any)
-                    .from('raw_products')
-                    .upsert(batch, {
-                        onConflict: 'source_id, external_id',
-                        ignoreDuplicates: false
-                    })
-                    .select('id, external_id');
+                try {
+                    // FAST UPSERT: Let DB handle conflicts via ON CONFLICT
+                    // Use RETURNING to get which were NEW vs UPDATED
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const { data, error } = await (supabaseAdmin as any)
+                        .from('raw_products')
+                        .upsert(batch, {
+                            onConflict: 'source_id, external_id',
+                            ignoreDuplicates: false
+                        })
+                        .select('id, crawled_at, updated_at');
 
-                if (error) {
-                    logger.error(`[${this.sourceName}] Batch ${Math.floor(i / batchSize) + 1} insert error:`, error);
-                    continue;
-                }
+                    if (error) {
+                        logger.warn(`[${this.sourceName}] Batch ${Math.floor(i / batchSize) + 1} failed, retrying with smaller chunks... Error:`, error.message);
 
-                totalSaved += data?.length || 0;
+                        // Fallback: Try one by one if batch failed
+                        for (const item of batch) {
+                            try {
+                                const { data: singleData } = await (supabaseAdmin as any)
+                                    .from('raw_products')
+                                    .upsert(item, {
+                                        onConflict: 'source_id, external_id',
+                                        ignoreDuplicates: false
+                                    })
+                                    .select('id, crawled_at, updated_at');
 
-                // Record price history - ONLY if price changed (Saves massive space)
-                if (data && data.length > 0) {
-                    // Fetch last prices for these products to compare
-                    const { data: lastPrices } = await (supabaseAdmin as any)
-                        .from('price_history')
-                        .select('raw_product_id, price')
-                        .in('raw_product_id', data.map((d: any) => d.id))
-                        .order('recorded_at', { ascending: false });
-
-                    const priceHistoryData = batch.map((item) => {
-                        const savedItem = data.find((d: { external_id: string }) => d.external_id === item.external_id);
-                        if (!savedItem) return null;
-
-                        // Check if ANY meaningful field changed from last recorded price
-                        const lastRecord = lastPrices?.find((lp: any) => lp.raw_product_id === savedItem.id);
-
-                        const hasNoChange = lastRecord &&
-                            Number(lastRecord.price) === Number(item.price) &&
-                            (lastRecord.original_price === null || Number(lastRecord.original_price) === Number(item.original_price)) &&
-                            lastRecord.discount_percent === item.discount_percent &&
-                            lastRecord.available === (item.available ?? true);
-
-                        if (hasNoChange) {
-                            return null; // Skip if nothing changed
+                                if (singleData) {
+                                    const row = singleData[0];
+                                    const created = new Date(row.crawled_at).getTime();
+                                    const updated = new Date(row.updated_at).getTime();
+                                    if (Math.abs(updated - created) < 2000) {
+                                        totalInserted++;
+                                    } else {
+                                        totalUpdated++;
+                                    }
+                                }
+                            } catch (innerErr) {
+                                logger.error(`[${this.sourceName}] Failed to save single item ${item.external_id}:`, innerErr);
+                            }
                         }
 
-                        return {
-                            raw_product_id: savedItem.id,
-                            price: item.price,
-                            original_price: item.original_price,
-                            discount_percent: item.discount_percent,
-                            available: item.available ?? true,
-                        };
-                    }).filter((v): v is NonNullable<typeof v> => v !== null);
-
-                    if (priceHistoryData.length > 0) {
-                        await (supabaseAdmin as any).from('price_history').insert(priceHistoryData as any);
+                        continue;
                     }
-                }
 
-                logger.info(`[${this.sourceName}] Saved batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueProductData.length / batchSize)}`);
+                    // Count new vs updated: if crawled_at ~= updated_at (within 1 second), it's new
+                    if (data) {
+                        for (const row of data) {
+                            const created = new Date(row.crawled_at).getTime();
+                            const updated = new Date(row.updated_at).getTime();
+                            if (Math.abs(updated - created) < 2000) {
+                                totalInserted++;
+                            } else {
+                                totalUpdated++;
+                            }
+                        }
+                    }
+
+                    logger.info(`[${this.sourceName}] Saved batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueProductData.length / batchSize)}`);
+                } catch (err) {
+                    logger.error(`[${this.sourceName}] Batch ${Math.floor(i / batchSize) + 1} exception:`, err);
+                }
             }
 
-            // Return accurate counts for auto-skip feature
-            const actualUpdated = totalSaved - actuallyNewCount;
-            logger.info(`[${this.sourceName}] 📊 Products: ${actuallyNewCount} NEW, ${actualUpdated} UPDATED (total: ${totalSaved})`);
+            logger.info(`[${this.sourceName}] 📊 Products: ${totalInserted} NEW, ${totalUpdated} UPDATED (total: ${totalInserted + totalUpdated})`);
 
-            return { inserted: actuallyNewCount, updated: actualUpdated };
+            return { inserted: totalInserted, updated: totalUpdated };
         } catch (error) {
             logger.error(`[${this.sourceName}] Failed to bulk save products:`, error);
             return { inserted: 0, updated: 0 };

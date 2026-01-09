@@ -1,5 +1,5 @@
-import { supabaseAdmin } from '@/lib/db/supabase';
-import logger from '@/lib/utils/logger';
+import { supabaseAdmin } from '../db/supabase';
+import logger from '../utils/logger';
 
 export interface CrawlKeyword {
     id: number;

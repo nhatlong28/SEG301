@@ -1,3 +1,30 @@
-2026/01/06-20:01:44.763 83d8 Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-3\Default\Session Storage/MANIFEST-000001
-2026/01/06-20:01:44.764 83d8 Recovering log #3
-2026/01/06-20:01:44.766 83d8 Reusing old log d:\WEBSITE\Caodulieu\.browser-data\worker-3\Default\Session Storage/000003.log 
+2026/01/07-21:22:22.759 a080 Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-3\Default\Session Storage/MANIFEST-000001
+2026/01/07-21:22:22.760 a080 Recovering log #7
+2026/01/07-21:22:22.761 a080 Reusing old log d:\WEBSITE\Caodulieu\.browser-data\worker-3\Default\Session Storage/000007.log 
+2026/01/07-21:26:27.558 7d0c Level-0 table #11: started
+2026/01/07-21:26:27.569 7d0c Level-0 table #11: 26279 bytes OK
+2026/01/07-21:26:27.591 7d0c Delete type=0 #7
+2026/01/07-21:39:11.292 7d0c Level-0 table #13: started
+2026/01/07-21:39:11.300 7d0c Level-0 table #13: 25980 bytes OK
+2026/01/07-21:39:11.321 7d0c Delete type=0 #10
+2026/01/07-21:45:15.279 7d0c Level-0 table #15: started
+2026/01/07-21:45:15.307 7d0c Level-0 table #15: 23778 bytes OK
+2026/01/07-21:45:15.329 7d0c Delete type=0 #12
+2026/01/07-21:48:26.010 a080 Level-0 table #17: started
+2026/01/07-21:48:26.025 a080 Level-0 table #17: 19973 bytes OK
+2026/01/07-21:48:26.047 a080 Delete type=0 #14
+2026/01/07-21:48:26.047 a080 Compacting 4@0 + 1@1 files
+2026/01/07-21:48:26.066 a080 Generated table #18@0: 31 keys, 3310 bytes
+2026/01/07-21:48:26.066 a080 Compacted 4@0 + 1@1 files => 3310 bytes
+2026/01/07-21:48:26.080 a080 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/01/07-21:48:26.080 a080 Delete type=2 #8
+2026/01/07-21:48:26.081 a080 Delete type=2 #11
+2026/01/07-21:48:26.081 a080 Delete type=2 #13
+2026/01/07-21:48:26.081 a080 Delete type=2 #15
+2026/01/07-21:48:26.081 a080 Delete type=2 #17
+2026/01/07-21:53:26.007 a080 Level-0 table #20: started
+2026/01/07-21:53:26.054 a080 Level-0 table #20: 17752 bytes OK
+2026/01/07-21:53:26.067 a080 Delete type=0 #16
+2026/01/07-21:56:26.010 a080 Level-0 table #22: started
+2026/01/07-21:56:26.032 a080 Level-0 table #22: 16463 bytes OK
+2026/01/07-21:56:26.043 a080 Delete type=0 #19

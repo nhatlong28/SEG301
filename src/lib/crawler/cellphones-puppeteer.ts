@@ -177,7 +177,7 @@ export class CellphonesPuppeteerCrawler extends PuppeteerCrawlerBase {
     }
 
     /**
-     * Mass crawl across all categories AND keywords
+     * Mass crawl - ENHANCED with Smart Auto-Skip
      */
     async massCrawl(options: { pagesPerCategory?: number; pagesPerKeyword?: number } = {}): Promise<CrawledProduct[]> {
         await this.initialize();
@@ -188,20 +188,54 @@ export class CellphonesPuppeteerCrawler extends PuppeteerCrawlerBase {
         const logId = await this.createCrawlLog();
         let totalErrors = 0;
 
-        // Fetch categories from database instead of hardcoded array
-        // Fetch categories from database with 24h freshness check
-        const dbCategories = await CategoryService.getCategories(this.sourceId, 24);
-        const categories = dbCategories.length > 0
-            ? dbCategories.map(cat => ({
-                slug: CategoryService.getSourceSlug(cat, 'cellphones'),
-                name: cat.name
-            }))
-            : CELLPHONES_CATEGORIES;
+        // Import CrawlProgressService for smart tracking
+        const { CrawlProgressService } = await import('./crawlProgressService');
+
+        // 🌳 PHASE 1: Fetch category tree from CategoryService
+        logger.info('[CellphoneS] 🌳 Fetching category tree...');
+        const categoryTree = await CategoryService.fetchCellphonesCategoryTree();
+        const leafCategories = CategoryService.getLeafCategories(categoryTree);
+        const allCategoriesFromTree = CategoryService.flattenCategories(categoryTree);
+
+        // Prioritize leaf categories (more specific)
+        let categories = [...leafCategories, ...allCategoriesFromTree.filter(c => c.level === 0)]
+            .map(cat => ({
+                id: cat.id,
+                name: cat.name,
+                slug: String(cat.slug || cat.id)
+            }));
+
+        // Remove duplicates
+        const seenSlugs = new Set<string>();
+        categories = categories.filter(c => {
+            if (seenSlugs.has(c.slug)) return false;
+            seenSlugs.add(c.slug);
+            return true;
+        });
+
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled categories
+        const uncrawledCategories = await CrawlProgressService.getUncrawledCategories(
+            this.sourceId,
+            categories.map(c => ({ id: c.id, name: c.name, slug: c.slug })),
+            24
+        );
+
+        if (uncrawledCategories.length > 0) {
+            const skipped = categories.length - uncrawledCategories.length;
+            categories = uncrawledCategories.map(c => ({ id: c.id, name: c.name, slug: c.slug! }));
+            logger.info(`[CellphoneS] ⏭️ SMART SKIP: ${skipped} categories already crawled, ${categories.length} remaining`);
+        }
 
         // Fetch keywords from database (ONLY older than 24h)
-        const keywords = await KeywordService.getKeywordStrings('cellphones', undefined, 24);
+        let keywords = await KeywordService.getKeywordStrings('cellphones', undefined, 24);
 
-        logger.info(`[CellphoneS-Puppeteer] Starting MASS CRAWL: ${categories.length} categories + ${keywords.length} keywords (Source: Database)`);
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled keywords
+        const uncrawledKeywords = await CrawlProgressService.getUncrawledKeywords(this.sourceId, keywords, 24);
+        if (uncrawledKeywords.length > 0) {
+            keywords = uncrawledKeywords;
+        }
+
+        logger.info(`[CellphoneS-Puppeteer] Starting MASS CRAWL: ${categories.length} categories + ${keywords.length} keywords`);
 
         // Phase 1: Crawl by categories
         for (const cat of categories) {

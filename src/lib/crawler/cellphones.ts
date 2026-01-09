@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { BaseCrawler, CrawledProduct, CrawlOptions } from './base';
-import logger from '@/lib/utils/logger';
+import { CategoryService, CategoryNode } from './categoryService';
+import logger from '../utils/logger';
 
 // CellphoneS category URLs for mass crawling
 const CELLPHONES_CATEGORIES = [
@@ -149,27 +150,64 @@ export class CellphonesCrawler extends BaseCrawler {
     /**
      * Mass crawl across all CellphoneS categories
      */
-    async massCrawl(maxPagesPerCategory: number = 10): Promise<CrawledProduct[]> {
+    async massCrawl(maxPagesPerCategory: number = 30): Promise<CrawledProduct[]> {
         await this.initialize();
 
         const allProducts: CrawledProduct[] = [];
         const logId = await this.createCrawlLog();
         let totalErrors = 0;
 
-        logger.info(`[CellphoneS] Starting MASS CRAWL across ${CELLPHONES_CATEGORIES.length} categories`);
+        // Import services
+        const { CrawlProgressService } = await import('./crawlProgressService');
 
-        for (const cat of CELLPHONES_CATEGORIES) {
+        // 🌳 PHASE 1: Fetch category tree
+        logger.info('[CellphoneS] 🌳 Fetching category tree from Service...');
+        const categoryTree = await CategoryService.fetchCellphonesCategoryTree();
+        const leafCategories = CategoryService.getLeafCategories(categoryTree);
+
+        let categories = leafCategories.map((cat: CategoryNode) => ({
+            id: cat.id,
+            name: cat.name,
+            slug: String(cat.slug || cat.id)
+        }));
+
+        // 🚀 SMART AUTO-SKIP
+        const uncrawledCategories = await CrawlProgressService.getUncrawledCategories(
+            this.sourceId,
+            categories.map(c => ({ id: c.id, name: c.name })),
+            24
+        );
+
+        if (uncrawledCategories.length > 0) {
+            const skipped = categories.length - uncrawledCategories.length;
+            categories = uncrawledCategories.map(c => {
+                const original = categories.find(cat => String(cat.id) === String(c.id));
+                return {
+                    id: String(c.id),
+                    name: c.name,
+                    slug: original?.slug || String(c.id)
+                };
+            });
+            logger.info(`[CellphoneS] ⏭️ SMART SKIP: ${skipped} categories already crawled, ${categories.length} remaining`);
+        }
+
+        logger.info(`[CellphoneS] Starting MASS CRAWL across ${categories.length} categories`);
+
+        for (const cat of categories) {
             if (this.shouldStop) {
                 logger.info('[CellphoneS] 🛑 Mass crawl stopped by user');
                 break;
             }
 
-            logger.info(`[CellphoneS] Crawling category: ${cat.name}`);
+            logger.info(`[CellphoneS] Crawling category: ${cat.name} (${cat.slug})`);
 
             try {
                 const products = await this.crawl({ category: cat.slug, maxPages: maxPagesPerCategory });
                 allProducts.push(...products);
-                await this.sleep(2000 + Math.random() * 1000);
+
+                // Mark category as crawled by updating log in crawl() or here if needed
+
+                await this.sleep(1000 + Math.random() * 500); // Faster turbo delay
             } catch (error) {
                 logger.error(`[CellphoneS] Failed category ${cat.name}:`, error);
                 totalErrors++;

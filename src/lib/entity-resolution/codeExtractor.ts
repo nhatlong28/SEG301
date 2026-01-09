@@ -10,8 +10,10 @@ export interface ExtractedCode {
     storage?: string;
     ram?: string;
     color?: string;
-    variant?: string;
+    variants?: string[]; // Renamed from single 'variant' string to array to capture multiple
+    variant?: string; // Keep for backward compatibility if needed, or deprecate
     year?: string;
+    type?: 'device' | 'accessory' | 'unknown';
     confidence: number;
 }
 
@@ -71,6 +73,7 @@ export class ProductCodeExtractor {
         /(\d{1,2})\s*gb\s*ram/i,
         /ram\s*(\d{1,2})\s*gb/i,
         /(\d{1,2})gb\/\d+gb/i, // "8GB/128GB" format
+        /(\d{1,2})\s*gb\s+(?=\d{2,4}\s*gb)/i, // "16GB 512GB" context (RAM before Storage)
     ];
 
     // Color patterns (Vietnamese + English)
@@ -86,6 +89,29 @@ export class ProductCodeExtractor {
         gray: /\b(gray|grey|xám)\b/i,
     };
 
+    // Accessory keywords
+    private readonly accessoryKeywords: RegExp[] = [
+        /\b(ốp|case|bao da|bao đựng|túi chống sốc|cover)\b/i,
+        /\b(kính|cường lực|screen protector|film|dán màn hình)\b/i,
+        /\b(sáp|sạc|charger|adapter|cáp|cable|dây sạc)\b/i,
+        /\b(tai nghe|headphone|earphone|airpods|buds|headset)\b/i,
+        /\b(đế|stand|giá đỡ|tripod|gậy)\b/i,
+        /\b(chuột|mouse|bàn phím|keyboard|pen|bút)\b/i
+    ];
+
+    // Device keywords (Explicit)
+    private readonly deviceKeywords: RegExp[] = [
+        /\b(điện thoại|smartphone|mobile|phone)\b/i,
+        /\b(laptop|máy tính|notebook|macbook|imac|surface|zenbook|vivobook|thinkpad|ideapad)\b/i,
+        /\b(tivi|tv|television)\b/i,
+        /\b(máy tính bảng|tablet|ipad|tab)\b/i,
+        /\b(đồng hồ|watch|smartwatch)\b/i,
+        /\b(tủ lạnh|fridge|refrigerator)\b/i,
+        /\b(máy giặt|washing|washer)\b/i,
+        // Specific high-value product lines that imply device if not accessory
+        /\b(iphone|galaxy|xperia|pixel|reno|redmi|poco|rog|legion)\b/i
+    ];
+
     // Variant patterns (Vietnamese market specific)
     private readonly variantPatterns: RegExp[] = [
         /\b(vn\/a|vn|chính\s*hãng)\b/i,
@@ -99,6 +125,9 @@ export class ProductCodeExtractor {
         const lowerName = productName.toLowerCase();
         const code: ExtractedCode = { confidence: 0 };
         let confidencePoints = 0;
+
+        // Detect Type
+        code.type = this.detectProductType(lowerName);
 
         // Extract brand
         for (const [brand, pattern] of Object.entries(this.brandPatterns)) {
@@ -202,6 +231,23 @@ export class ProductCodeExtractor {
     }
 
     /**
+     * Detect product type based on keywords
+     */
+    private detectProductType(lowerName: string): 'device' | 'accessory' | 'unknown' {
+        // Check for accessory keywords first (greedy)
+        for (const pattern of this.accessoryKeywords) {
+            if (pattern.test(lowerName)) return 'accessory';
+        }
+
+        // Check for device keywords
+        for (const pattern of this.deviceKeywords) {
+            if (pattern.test(lowerName)) return 'device';
+        }
+
+        return 'unknown';
+    }
+
+    /**
      * Normalize model name for comparison
      */
     private normalizeModel(model: string): string {
@@ -210,13 +256,25 @@ export class ProductCodeExtractor {
             .replace(/\s+/g, '')
             .replace(/plus|\+/g, 'plus')
             .replace(/pro\s*max/g, 'promax')
-            .replace(/max\s*pro/g, 'promax');
+            .replace(/max\s*pro/g, 'promax')
+            .replace(/ultra/g, 'ultra'); // Explicitly handle Ultra
     }
 
     /**
      * Compare two extracted codes
      */
     compareExtractedCodes(code1: ExtractedCode, code2: ExtractedCode): number {
+        // Critical: Type Mismatch Check
+        if (code1.type && code2.type) {
+            // One is accessory, one is device -> Immediate mismatch
+            if (
+                (code1.type === 'accessory' && code2.type === 'device') ||
+                (code1.type === 'device' && code2.type === 'accessory')
+            ) {
+                return 0;
+            }
+        }
+
         let score = 0;
         let totalWeight = 0;
 

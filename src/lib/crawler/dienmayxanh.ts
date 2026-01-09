@@ -2,8 +2,8 @@ import * as cheerio from 'cheerio';
 import { PuppeteerCrawlerBase, PuppeteerCrawlOptions } from './puppeteerBase';
 import { CrawledProduct } from './base';
 import { KeywordService } from './keywordService';
-import { CategoryService } from './categoryService';
-import logger from '@/lib/utils/logger';
+import { CategoryService, CategoryNode } from './categoryService';
+import logger from '../utils/logger';
 
 // DienmayXanh category URLs for mass crawling
 const DMX_CATEGORIES = [
@@ -195,7 +195,7 @@ export class DienmayxanhCrawler extends PuppeteerCrawlerBase {
     }
 
     /**
-     * Mass crawl across all DienmayXanh categories
+     * Mass crawl - ENHANCED with Smart Auto-Skip
      */
     async massCrawl(options: { pagesPerCategory?: number; pagesPerKeyword?: number } = {}): Promise<CrawledProduct[]> {
         await this.initialize();
@@ -206,21 +206,83 @@ export class DienmayxanhCrawler extends PuppeteerCrawlerBase {
         const logId = await this.createCrawlLog();
         let totalErrors = 0;
 
-        // Fetch categories from database instead of hardcoded array
-        // Fetch categories from database with 24h freshness check
-        const dbCategories = await CategoryService.getCategories(this.sourceId, 24);
-        const categories = dbCategories.length > 0
-            ? dbCategories.map(cat => ({
-                slug: CategoryService.getSourceSlug(cat, 'dienmayxanh'),
-                name: cat.name
-            }))
-            : DMX_CATEGORIES;
+        // Import CrawlProgressService for smart tracking
+        const { CrawlProgressService } = await import('./crawlProgressService');
+
+        // 🌳 PHASE 1: Fetch category tree from CategoryService
+        logger.info('[DienmayXanh] 🌳 Fetching category tree...');
+        const categoryTree = await CategoryService.fetchDienmayxanhCategoryTree();
+        const leafCategories = CategoryService.getLeafCategories(categoryTree);
+        const allCategoriesFromTree = CategoryService.flattenCategories(categoryTree);
+
+        // Prioritize leaf categories (more specific)
+        let categories = [...leafCategories, ...allCategoriesFromTree.filter(c => c.level === 0)]
+            .map((cat: CategoryNode) => ({
+                id: cat.id,
+                name: cat.name,
+                slug: String(cat.slug || cat.id)
+            }));
+
+        // Remove duplicates
+        const seenSlugs = new Set<string>();
+        categories = categories.filter(c => {
+            if (seenSlugs.has(c.slug)) return false;
+            seenSlugs.add(c.slug);
+            return true;
+        });
+
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled categories
+        const uncrawledCategories = await CrawlProgressService.getUncrawledCategories(
+            this.sourceId,
+            categories.map(c => ({ id: c.id, name: c.name, slug: c.slug })),
+            24
+        );
+
+        if (uncrawledCategories.length > 0) {
+            const skipped = categories.length - uncrawledCategories.length;
+            categories = uncrawledCategories.map(c => ({ id: c.id, name: c.name, slug: c.slug! }));
+            logger.info(`[DienmayXanh] ⏭️ SMART SKIP: ${skipped} categories already crawled, ${categories.length} remaining`);
+        }
 
         // Fetch keywords from database (ONLY older than 24h)
-        const keywords = await KeywordService.getKeywordStrings('dienmayxanh', undefined, 24);
+        let keywords = await KeywordService.getKeywordStrings('dienmayxanh', undefined, 24);
 
-        logger.info(`[DienmayXanh] Starting MASS CRAWL: ${categories.length} categories + ${keywords.length} keywords (Source: Database)`);
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled keywords
+        const uncrawledKeywords = await CrawlProgressService.getUncrawledKeywords(this.sourceId, keywords, 24);
+        if (uncrawledKeywords.length > 0) {
+            keywords = uncrawledKeywords;
+        }
 
+        logger.info(`[DienmayXanh] Starting MASS CRAWL: ${categories.length} categories + ${keywords.length} keywords`);
+
+        // Phase 1: Crawl by keywords (from database) - PRIORITIZED
+        for (const keyword of keywords) {
+            if (this.shouldStop) {
+                logger.info('[DienmayXanh] 🛑 Mass crawl stopped by user');
+                break;
+            }
+
+            logger.info(`[DienmayXanh] Crawling keyword: ${keyword}`);
+
+            try {
+                const products = await this.crawl({ keyword, maxPages: maxPagesKeyword });
+                allProducts.push(...products);
+
+                // Mark keyword as crawled
+                const kwObj = await KeywordService.getKeywords('dienmayxanh', undefined, 24);
+                const match = kwObj.find(k => k.keyword === keyword);
+                if (match) {
+                    await KeywordService.markCrawled(match.id);
+                }
+
+                await this.sleep(3000);
+            } catch (error) {
+                logger.error(`[DienmayXanh] Failed keyword "${keyword}":`, error);
+                totalErrors++;
+            }
+        }
+
+        // Phase 2: Crawl by categories
         for (const cat of categories) {
             if (this.shouldStop) {
                 logger.info('[DienmayXanh] 🛑 Mass crawl stopped by user');
@@ -235,25 +297,6 @@ export class DienmayxanhCrawler extends PuppeteerCrawlerBase {
                 await this.sleep(5000);
             } catch (error) {
                 logger.error(`[DienmayXanh] Failed category ${cat.name}:`, error);
-                totalErrors++;
-            }
-        }
-
-        // Phase 2: Crawl by keywords (from database)
-        for (const keyword of keywords) {
-            if (this.shouldStop) {
-                logger.info('[DienmayXanh] 🛑 Mass crawl stopped by user');
-                break;
-            }
-
-            logger.info(`[DienmayXanh] Crawling keyword: ${keyword}`);
-
-            try {
-                const products = await this.crawl({ keyword, maxPages: maxPagesKeyword });
-                allProducts.push(...products);
-                await this.sleep(3000);
-            } catch (error) {
-                logger.error(`[DienmayXanh] Failed keyword "${keyword}":`, error);
                 totalErrors++;
             }
         }

@@ -26,6 +26,18 @@ export type { CrawlStats, MassCrawlOptions, MassCrawlResult } from './orchestrat
 export { KeywordService } from './keywordService';
 export type { CrawlKeyword } from './keywordService';
 
+// Category Service (Enhanced)
+export { CategoryService } from './categoryService';
+export type { CrawlCategory, CategoryNode } from './categoryService';
+
+// Sitemap Service (NEW)
+export { SitemapService, getSitemapService, PLATFORM_SITEMAPS } from './sitemapService';
+export type { SitemapUrl, SitemapIndex } from './sitemapService';
+
+// CrawlProgressService - Smart Auto-Skip Logic
+export { CrawlProgressService } from './crawlProgressService';
+export type { CrawlProgress, CrawlQueue } from './crawlProgressService';
+
 import { ShopeeCrawler } from './shopee';
 import { TikiCrawler } from './tiki';
 import { LazadaCrawler } from './lazada';

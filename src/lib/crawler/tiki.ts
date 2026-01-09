@@ -1,7 +1,7 @@
 import { BaseCrawler, CrawledProduct, CrawlOptions } from './base';
-import { CategoryService } from './categoryService';
+import { CategoryService, CategoryNode } from './categoryService';
 import { KeywordService } from './keywordService';
-import logger from '@/lib/utils/logger';
+import logger from '../utils/logger';
 
 interface TikiSearchResponse {
     data?: Array<{
@@ -163,8 +163,8 @@ export class TikiCrawler extends BaseCrawler {
                         consecutiveNoNewProducts++;
                         logger.info(`[Tiki] ⚠️ Page ${page}: No new products (${updated} updated). Consecutive: ${consecutiveNoNewProducts}/3`);
 
-                        if (consecutiveNoNewProducts >= 3) {
-                            logger.info(`[Tiki] ⏭️ AUTO-SKIP: 3 consecutive pages with no new products. Moving to next.`);
+                        if (consecutiveNoNewProducts >= 10) {
+                            logger.info(`[Tiki] ⏭️ AUTO-SKIP: 10 consecutive pages with no new products. Moving to next.`);
                             break;
                         }
                     } else if (inserted > 0) {
@@ -278,57 +278,123 @@ export class TikiCrawler extends BaseCrawler {
 
     /**
      * Mass crawl across all categories and keywords
+     * ENHANCED: Smart auto-skip - only crawls uncrawled items
      */
-    async massCrawl(maxPagesPerCategory: number = 40): Promise<CrawledProduct[]> {
+    async massCrawl(maxPagesPerCategory: number = 100): Promise<CrawledProduct[]> {
         await this.initialize();
+        // ... (phần code trước đó giữ nguyên)
+
+        // Tăng tốc độ lưu batch trong các vòng lặp phía dưới
 
         const allProducts: CrawledProduct[] = [];
         const logId = await this.createCrawlLog();
         let totalErrors = 0;
+        let totalSaved = 0;
 
-        // Fetch categories from database instead of hardcoded array
-        // Fetch categories from database with 24h freshness check
-        const dbCategories = await CategoryService.getCategories(this.sourceId, 24);
-        const categories = dbCategories.length > 0
-            ? dbCategories.map(cat => ({
-                id: parseInt(CategoryService.getSourceSlug(cat, 'tiki')),
+        // Import CrawlProgressService for smart tracking
+        const { CrawlProgressService } = await import('./crawlProgressService');
+
+        // PHASE 1: Fetch FULL category tree from Tiki API
+        logger.info('[Tiki] 🌳 Fetching full category tree from API...');
+        const categoryTree = await CategoryService.fetchTikiCategoryTree();
+
+        // Get all leaf categories (most specific, best for crawling)
+        const leafCategories = CategoryService.getLeafCategories(categoryTree);
+
+        // Also get level 1-2 categories for broader coverage
+        const allCategoriesFromTree = CategoryService.flattenCategories(categoryTree);
+        const mainCategories = allCategoriesFromTree.filter(c => c.level <= 2);
+
+        // Combine: leaf categories first (more specific), then main categories
+        const categoriesToCrawl = [
+            ...leafCategories.slice(0, 100), // Top 100 leaf categories
+            ...mainCategories.filter(c => !leafCategories.find(l => l.id === c.id)),
+        ];
+
+        // Fallback to hardcoded if API fails
+        let categories = categoriesToCrawl.length > 0
+            ? categoriesToCrawl.map((cat: CategoryNode) => ({
+                id: typeof cat.id === 'number' ? cat.id : parseInt(String(cat.id)),
                 name: cat.name
             }))
             : TIKI_CATEGORIES;
 
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled categories
+        const uncrawledCategories = await CrawlProgressService.getUncrawledCategories(
+            this.sourceId,
+            categories.map(c => ({ id: c.id, name: c.name })),
+            24 // Skip if crawled within 24h
+        );
+
+        // Use only uncrawled categories, or all if all were recently crawled
+        if (uncrawledCategories.length > 0) {
+            categories = uncrawledCategories.map(c => ({ id: Number(c.id), name: c.name }));
+            logger.info(`[Tiki] ⏭️ SMART SKIP: ${categoriesToCrawl.length - categories.length} categories already crawled, ${categories.length} remaining`);
+        } else {
+            logger.info(`[Tiki] 🔄 All categories crawled within 24h, re-crawling all...`);
+        }
+
         // Fetch keywords with 24h freshness check
-        const dbKeywords = await KeywordService.getKeywordStrings('tiki', undefined, 24);
-        const keywords = dbKeywords.length > 0 ? dbKeywords : TIKI_KEYWORDS;
+        let keywords = await KeywordService.getKeywordStrings('tiki', undefined, 24);
+        if (keywords.length === 0) keywords = TIKI_KEYWORDS;
 
-        logger.info(`[Tiki] Starting MASS CRAWL: ${categories.length} categories + ${keywords.length} keywords (Source: Database)`);
+        // 🚀 SMART AUTO-SKIP: Filter out recently crawled keywords
+        const uncrawledKeywords = await CrawlProgressService.getUncrawledKeywords(
+            this.sourceId,
+            keywords,
+            24
+        );
 
-        // Crawl by category IDs first (more structured data)
-        for (const cat of categories) {
+        if (uncrawledKeywords.length > 0) {
+            keywords = uncrawledKeywords;
+            logger.info(`[Tiki] ⏭️ SMART SKIP: ${keywords.length} uncrawled keywords`);
+        }
+
+        logger.info(`[Tiki] 🚀 Starting MASS CRAWL: ${categories.length} categories + ${keywords.length} keywords`);
+
+        // PHASE 2: Crawl by category IDs (more structured data)
+        for (let i = 0; i < categories.length; i++) {
             if (this.shouldStop) {
                 logger.info('[Tiki] 🛑 Mass crawl stopped by user');
                 break;
             }
 
-            logger.info(`[Tiki] Crawling category: ${cat.name}`);
+            const cat = categories[i];
+            logger.info(`[Tiki] 📂 [${i + 1}/${categories.length}] Category: ${cat.name} (ID: ${cat.id})`);
 
             try {
                 const products = await this.crawlByCategoryId(cat.id, maxPagesPerCategory);
                 allProducts.push(...products);
-                await this.sleep(2000 + Math.random() * 1000);
+
+                // Save products every 500 items
+                if (allProducts.length >= 500) {
+                    const toSave = allProducts.splice(0, 500);
+                    const { inserted, updated } = await this.saveProducts(toSave);
+                    totalSaved += inserted + updated;
+
+                    await this.updateCrawlLog(logId, {
+                        total: totalSaved,
+                        newItems: totalSaved,
+                        updated: 0,
+                        errors: totalErrors,
+                    }, false);
+                }
+
+                await this.sleep(1500 + Math.random() * 1000);
             } catch (error) {
                 logger.error(`[Tiki] Failed category ${cat.name}:`, error);
                 totalErrors++;
             }
         }
 
-        // Also crawl by keywords
+        // PHASE 3: Crawl by keywords for additional coverage
         for (const keyword of keywords) {
             if (this.shouldStop) break;
 
-            logger.info(`[Tiki] Crawling keyword: ${keyword}`);
+            logger.info(`[Tiki] 🔍 Crawling keyword: ${keyword}`);
 
             try {
-                const products = await this.crawl({ query: keyword, maxPages: 10 });
+                const products = await this.crawl({ query: keyword, maxPages: 20 });
                 allProducts.push(...products);
                 await this.sleep(2000 + Math.random() * 1000);
             } catch (error) {
@@ -337,15 +403,82 @@ export class TikiCrawler extends BaseCrawler {
             }
         }
 
+        // Save remaining products
+        if (allProducts.length > 0) {
+            const { inserted, updated } = await this.saveProducts(allProducts);
+            totalSaved += inserted + updated;
+        }
+
         await this.updateCrawlLog(logId, {
-            total: allProducts.length,
-            newItems: allProducts.length,
+            total: totalSaved,
+            newItems: totalSaved,
             updated: 0,
             errors: totalErrors,
         });
 
-        logger.info(`[Tiki] Mass crawl completed: ${allProducts.length} total products`);
+        logger.info(`[Tiki] ✅ Mass crawl completed: ${totalSaved} total products saved`);
         return allProducts;
+    }
+
+    /**
+     * Crawl products from a specific seller/shop
+     * Each top seller can have thousands of products
+     */
+    async crawlSeller(sellerId: number, maxPages: number = 50): Promise<CrawledProduct[]> {
+        await this.initialize();
+
+        const products: CrawledProduct[] = [];
+        const logId = await this.createCrawlLog();
+        let errorCount = 0;
+
+        logger.info(`[Tiki] 🏪 Crawling seller ID: ${sellerId}`);
+
+        for (let page = 1; page <= maxPages; page++) {
+            if (this.shouldStop) break;
+
+            try {
+                const url = `${this.baseApiUrl}?seller=${sellerId}&page=${page}&limit=40&sort=top_seller`;
+
+                const response = await this.queueFetch<TikiSearchResponse>(url, {
+                    headers: this.getTikiHeaders(),
+                });
+
+                if (!response.data?.length) {
+                    logger.info(`[Tiki] Seller ${sellerId}: No more products at page ${page}`);
+                    break;
+                }
+
+                for (const item of response.data) {
+                    const product = this.parseProduct(item);
+                    if (product) {
+                        products.push(product);
+                    }
+                }
+
+                logger.info(`[Tiki] Seller ${sellerId} page ${page}: ${response.data.length} items`);
+
+                if (response.paging && page >= response.paging.last_page) {
+                    break;
+                }
+
+                await this.sleep(400 + Math.random() * 300);
+            } catch (error) {
+                logger.error(`[Tiki] Seller crawl error at page ${page}:`, error);
+                errorCount++;
+                if (errorCount >= 3) break;
+            }
+        }
+
+        const { inserted } = await this.saveProducts(products);
+
+        await this.updateCrawlLog(logId, {
+            total: inserted,
+            newItems: inserted,
+            updated: 0,
+            errors: errorCount,
+        });
+
+        return products;
     }
 
     async crawlCategory(categorySlug: string, maxPages = 50): Promise<CrawledProduct[]> {

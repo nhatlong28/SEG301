@@ -55,8 +55,8 @@ async function main() {
         logger.info('=== STEP 1: MASS CRAWL ===');
         const crawlResult = await runMassCrawl({
             workers: 5,
-            pagesPerKeyword: 2, // Start with smaller batch for testing
-            sources: ['shopee', 'lazada'], // Prioritize fixed sources
+            pagesPerKeyword: 10,
+            sources: ['shopee', 'lazada', 'tiki', 'cellphones', 'dienmayxanh'],
             onProgress: (stats) => {
                 logger.info(`[Crawl Progress] ${stats.source}: ${stats.status} - ${stats.products} products`);
             },

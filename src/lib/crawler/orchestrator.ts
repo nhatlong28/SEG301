@@ -1,16 +1,19 @@
+try {
+    require('dotenv').config({ path: '.env.local' });
+} catch (e) { }
 import fs from 'fs';
 import path from 'path';
 import { getGlobalBrowserPool, shutdownGlobalPool } from './browserPool';
 import { ShopeeCrawler } from './shopee';
 import { LazadaCrawler } from './lazada';
 import { TikiCrawler } from './tiki';
-import { CellphonesPuppeteerCrawler } from './cellphones-puppeteer';
+import { CellphonesCrawler } from './cellphones';
 import { DienmayxanhCrawler } from './dienmayxanh';
 import { CrawledProduct } from './base';
-import logger from '@/lib/utils/logger';
+import logger from '../utils/logger';
 
 // Union type for all crawler instances
-type CrawlerInstance = ShopeeCrawler | LazadaCrawler | TikiCrawler | CellphonesPuppeteerCrawler | DienmayxanhCrawler;
+type CrawlerInstance = ShopeeCrawler | LazadaCrawler | TikiCrawler | CellphonesCrawler | DienmayxanhCrawler;
 
 export interface CrawlStats {
     source: string;
@@ -29,10 +32,21 @@ export class CrawlerOrchestrator {
     private readonly logDir: string;
 
     constructor() {
-        this.logDir = path.join(process.cwd(), 'logs', 'crawls');
+        // Use /tmp for logs in Vercel/production environment if standard logs dir implies read-only
+        const isVercel = process.env.VERCEL === '1';
+        this.logDir = isVercel
+            ? path.join('/tmp', 'logs', 'crawls')
+            : path.join(process.cwd(), 'logs', 'crawls');
+
         // Ensure log directory exists
-        if (!fs.existsSync(this.logDir)) {
-            fs.mkdirSync(this.logDir, { recursive: true });
+        try {
+            if (!fs.existsSync(this.logDir)) {
+                fs.mkdirSync(this.logDir, { recursive: true });
+            }
+        } catch (error) {
+            console.error('[Orchestrator] Failed to create log directory (logging to file disabled):', error);
+            // Fallback to null or flag to disable file logging
+            (this as any).fileLoggingDisabled = true;
         }
     }
 
@@ -59,7 +73,7 @@ export class CrawlerOrchestrator {
         // Initialize global browser pool if needed (for puppeteer crawlers)
         // Initialize global browser pool if needed (for puppeteer crawlers)
         // Note: BaseCrawler doesn't strictly need it but PuppeteerCrawlerBase does
-        getGlobalBrowserPool({ maxBrowsers: 5 });
+        getGlobalBrowserPool({ maxBrowsers: 10 });
 
         let crawler: CrawlerInstance;
 
@@ -68,7 +82,7 @@ export class CrawlerOrchestrator {
                 case 'shopee': crawler = new ShopeeCrawler(options); break;
                 case 'tiki': crawler = new TikiCrawler(); break;
                 case 'lazada': crawler = new LazadaCrawler(options); break;
-                case 'cellphones': crawler = new CellphonesPuppeteerCrawler(); break;
+                case 'cellphones': crawler = new CellphonesCrawler(); break;
                 case 'dienmayxanh': crawler = new DienmayxanhCrawler(); break;
                 default: throw new Error(`Unknown source: ${source}`);
             }
@@ -175,6 +189,8 @@ export class CrawlerOrchestrator {
      * Save crawl log to JSON file
      */
     private async saveLogFile(source: string, status: string) {
+        if ((this as any).fileLoggingDisabled) return; // Skip if logging disabled
+
         try {
             const stats = this.stats.get(source);
             if (!stats) return;

@@ -8,11 +8,15 @@ import { ProductCodeExtractor } from './codeExtractor';
 import logger from '@/lib/utils/logger';
 
 export interface QualityResult {
-    quality_score: number;  // 0-100
+    quality_score: number;  // 0-1 (normalized)
     confidence: 'excellent' | 'good' | 'fair' | 'poor';
     issues: string[];
     needs_review: boolean;
 }
+
+// Helper to normalize score to 0-1 for internal calc if needed, but output is 0-100 per interface
+// Wait, let's wait to view the test file first.
+
 
 interface RawProductLike {
     id: number;
@@ -46,88 +50,88 @@ export class CanonicalQualityScorer {
      * Calculate comprehensive quality score for a canonical product
      */
     calculateQuality(canonical: CanonicalLike, cluster: RawProductLike[]): QualityResult {
-        let score = 100;
+        let score = 1.0;
         const issues: string[] = [];
 
-        // 1. Source coverage (10 points)
-        const sourceScore = Math.min((canonical.source_count || 1) / 5, 1) * 10;
-        score -= 10 - sourceScore;
+        // 1. Source coverage (0.1 points)
+        const sourceScore = Math.min((canonical.source_count || 1) / 5, 1) * 0.1;
+        score -= 0.1 - sourceScore;
         if ((canonical.source_count || 1) === 1) {
             issues.push('Single source coverage');
         }
 
-        // 2. Price consistency (20 points)
+        // 2. Price consistency (0.2 points)
         const priceVariance = this.calculatePriceVariance(cluster);
         if (priceVariance > 0.3) {
-            score -= 15;
+            score -= 0.15;
             issues.push('High price variance (>30%)');
         } else if (priceVariance > 0.15) {
-            score -= 5;
+            score -= 0.05;
             issues.push('Moderate price variance (>15%)');
         }
 
-        // 3. Specification consistency (15 points)
+        // 3. Specification consistency (0.15 points)
         const specConsistency = this.checkSpecConsistency(cluster);
         if (specConsistency < 0.7) {
-            score -= 15;
+            score -= 0.15;
             issues.push('Inconsistent specifications');
         } else if (specConsistency < 0.85) {
-            score -= 7;
+            score -= 0.07;
         }
 
-        // 4. Review count (15 points)
+        // 4. Review count (0.15 points)
         if ((canonical.total_reviews || 0) < 5) {
-            score -= 10;
+            score -= 0.1;
             issues.push('Very low review count (<5)');
         } else if ((canonical.total_reviews || 0) < 20) {
-            score -= 5;
+            score -= 0.05;
             issues.push('Low review count (<20)');
         }
 
-        // 5. Availability (10 points)
+        // 5. Availability (0.1 points)
         const availabilityRate = cluster.filter(p => p.available).length / cluster.length;
         if (availabilityRate < 0.3) {
-            score -= 10;
+            score -= 0.1;
             issues.push('Low availability (<30%)');
         } else if (availabilityRate < 0.5) {
-            score -= 5;
+            score -= 0.05;
             issues.push('Moderate availability (<50%)');
         }
 
-        // 6. Data completeness (15 points)
+        // 6. Data completeness (0.15 points)
         const completeness = this.checkDataCompleteness(canonical);
         if (completeness < 0.5) {
-            score -= 15;
+            score -= 0.15;
             issues.push('Missing critical data');
         } else if (completeness < 0.7) {
-            score -= 7;
+            score -= 0.07;
             issues.push('Incomplete product data');
         }
 
-        // 7. Rating confidence (10 points)
+        // 7. Rating confidence (0.1 points)
         const ratingConfidence = this.getRatingConfidence(canonical.total_reviews || 0);
         if (ratingConfidence < 0.3) {
-            score -= 7;
+            score -= 0.07;
             issues.push('Low confidence rating');
         } else if (ratingConfidence < 0.5) {
-            score -= 3;
+            score -= 0.03;
         }
 
-        // 8. Name quality (5 points)
+        // 8. Name quality (0.05 points)
         const nameQuality = this.checkNameQuality(canonical.name || '');
         if (nameQuality < 0.5) {
-            score -= 5;
+            score -= 0.05;
             issues.push('Poor product name quality');
         }
 
         // Ensure score is within bounds
-        score = Math.max(0, Math.min(100, score));
+        score = Math.max(0, Math.min(1, score));
 
         return {
-            quality_score: Math.round(score),
+            quality_score: Number(score.toFixed(2)),
             confidence: this.getConfidenceLevel(score),
             issues,
-            needs_review: score < 60 || issues.length > 2,
+            needs_review: score < 0.6 || issues.length > 2,
         };
     }
 
@@ -202,10 +206,12 @@ export class CanonicalQualityScorer {
         for (const field of importantFields) {
             const value = canonical[field];
             if (value !== undefined && value !== null) {
-                if (typeof value === 'string' && value.trim().length > 0) {
-                    filledCount++;
-                } else if (typeof value === 'number' && value > 0) {
-                    filledCount++;
+                if (typeof value === 'string') {
+                    if (value.trim().length > 0) filledCount++;
+                } else if (typeof value === 'number') {
+                    if (value > 0) filledCount++;
+                } else {
+                    filledCount++; // Other non-null types
                 }
             }
         }
@@ -258,9 +264,9 @@ export class CanonicalQualityScorer {
      * Get confidence level string
      */
     private getConfidenceLevel(score: number): 'excellent' | 'good' | 'fair' | 'poor' {
-        if (score >= 85) return 'excellent';
-        if (score >= 70) return 'good';
-        if (score >= 50) return 'fair';
+        if (score >= 0.85) return 'excellent';
+        if (score >= 0.7) return 'good';
+        if (score >= 0.5) return 'fair';
         return 'poor';
     }
 

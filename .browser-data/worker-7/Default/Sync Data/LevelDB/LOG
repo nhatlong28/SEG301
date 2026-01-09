@@ -1,2 +1,3 @@
-2026/01/06-15:21:34.068 45ac Creating DB d:\WEBSITE\Caodulieu\.browser-data\worker-7\Default\Sync Data\LevelDB since it was missing.
-2026/01/06-15:21:34.203 45ac Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-7\Default\Sync Data\LevelDB/MANIFEST-000001
+2026/01/07-21:33:56.478 aac8 Reusing MANIFEST d:\WEBSITE\Caodulieu\.browser-data\worker-7\Default\Sync Data\LevelDB/MANIFEST-000001
+2026/01/07-21:33:56.480 aac8 Recovering log #3
+2026/01/07-21:33:56.480 aac8 Reusing old log d:\WEBSITE\Caodulieu\.browser-data\worker-7\Default\Sync Data\LevelDB/000003.log 

@@ -100,8 +100,13 @@ async function handleSingleCrawl(
 
 import { supabaseAdmin } from '@/lib/db/supabase';
 
+// Cache for source counts - refresh every 30 seconds to reduce DB load
+let sourceCountsCache: Record<number, number> = {};
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 30000; // 30 seconds
+
 /**
- * GET - Check crawl status
+ * GET - Check crawl status (optimized with batched queries & caching)
  */
 export async function GET() {
     const orchestrator = getOrchestrator();
@@ -110,39 +115,61 @@ export async function GET() {
     // Fetch all sources definitions
     const { data: sources } = await (supabaseAdmin as any).from('sources').select('id, type');
 
-    const statsWithTotals = await Promise.all(liveStats.map(async (stat) => {
-        const sourceDef = sources?.find((s: any) => s.type === stat.source);
-        let total = 0;
+    const now = Date.now();
 
-        if (sourceDef) {
-            const { count } = await (supabaseAdmin as any)
-                .from('raw_products')
-                .select('*', { count: 'exact', head: true })
-                .eq('source_id', sourceDef.id);
-            total = count || 0;
+    // Check if cache needs refresh
+    if (now - cacheTimestamp > CACHE_TTL_MS) {
+        // Batch query: Get counts for ALL sources in a single query using RPC or grouped query
+        try {
+            const { data: counts, error } = await (supabaseAdmin as any)
+                .rpc('get_product_counts_by_source');
+
+            if (!error && counts) {
+                // RPC returns: [{ source_id: 1, count: 1000 }, ...]
+                sourceCountsCache = {};
+                for (const row of counts) {
+                    sourceCountsCache[row.source_id] = row.count;
+                }
+            } else if (sources) {
+                // Fallback: Parallel COUNT queries for each source (fast, max 5 parallel queries)
+                sourceCountsCache = {};
+                const countPromises = sources.map(async (source: any) => {
+                    const { count } = await (supabaseAdmin as any)
+                        .from('raw_products')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('source_id', source.id);
+                    return { source_id: source.id, count: count || 0 };
+                });
+                const results = await Promise.all(countPromises);
+                for (const { source_id, count } of results) {
+                    sourceCountsCache[source_id] = count;
+                }
+            }
+            cacheTimestamp = now;
+        } catch (e) {
+            console.error('Failed to batch fetch counts:', e);
         }
+    }
 
+    // Build stats with cached totals
+    const statsWithTotals = liveStats.map((stat) => {
+        const sourceDef = sources?.find((s: any) => s.type === stat.source);
         return {
             ...stat,
-            totalProducts: total
+            totalProducts: sourceDef ? (sourceCountsCache[sourceDef.id] || 0) : 0
         };
-    }));
+    });
 
     // Also include sources that are NOT in liveStats (idle ones)
     if (sources) {
         for (const source of sources) {
             if (!statsWithTotals.find(s => s.source === source.type)) {
-                const { count } = await (supabaseAdmin as any)
-                    .from('raw_products')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('source_id', source.id);
-
                 statsWithTotals.push({
                     source: source.type,
                     status: 'idle',
                     products: 0,
                     errors: 0,
-                    totalProducts: count || 0
+                    totalProducts: sourceCountsCache[source.id] || 0
                 });
             }
         }

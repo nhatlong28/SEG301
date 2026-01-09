@@ -54,49 +54,13 @@ type DeduplicationMode = 'incremental' | 'fresh';
 
 export default function MergeProgress() {
     const [mode, setMode] = useState<DeduplicationMode>('incremental');
+    const [minMatchScore, setMinMatchScore] = useState(0.75);
     const [isRunning, setIsRunning] = useState(false);
     const [progress, setProgress] = useState<DeduplicationProgress | null>(null);
     const [matrixData, setMatrixData] = useState<MatrixData | null>(null);
     const [logs, setLogs] = useState<string[]>([]);
     const eventSourceRef = useRef<EventSource | null>(null);
     const logsEndRef = useRef<HTMLDivElement>(null);
-
-    // Fetch initial status and matrix
-    useEffect(() => {
-        fetchStatus();
-        fetchMatrix();
-    }, []);
-
-    // Auto-scroll logs
-    useEffect(() => {
-        logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [logs]);
-
-    const fetchStatus = async () => {
-        try {
-            const res = await fetch('/api/admin/deduplicate');
-            const data = await res.json();
-            setIsRunning(data.isRunning);
-            if (data.currentProgress) {
-                setProgress(data.currentProgress);
-                if (data.isRunning) {
-                    startSSE();
-                }
-            }
-        } catch {
-            // Error fetching status
-        }
-    };
-
-    const fetchMatrix = async () => {
-        try {
-            const res = await fetch('/api/admin/deduplicate/matrix');
-            const data = await res.json();
-            setMatrixData(data);
-        } catch {
-            // Error fetching matrix
-        }
-    };
 
     const startSSE = useCallback(() => {
         if (eventSourceRef.current) {
@@ -133,7 +97,7 @@ export default function MergeProgress() {
                 if (data.phase === 'done' || data.phase === 'error') {
                     setIsRunning(false);
                     es.close();
-                    fetchMatrix();
+                    if (fetchMatrix) fetchMatrix();
                     if (data.phase === 'done') {
                         toast.success(`Gộp thành công! ${data.canonicalCreated} sản phẩm canonical`);
                     }
@@ -149,6 +113,22 @@ export default function MergeProgress() {
         };
     }, []);
 
+    const fetchStatus = useCallback(async () => {
+        try {
+            const res = await fetch('/api/admin/deduplicate');
+            const data = await res.json();
+            setIsRunning(data.isRunning);
+            if (data.currentProgress) {
+                setProgress(data.currentProgress);
+                if (data.isRunning) {
+                    startSSE();
+                }
+            }
+        } catch {
+            // Error fetching status
+        }
+    }, [startSSE]);
+
     const handleStart = async () => {
         if (isRunning) return;
 
@@ -159,7 +139,7 @@ export default function MergeProgress() {
             const res = await fetch('/api/admin/deduplicate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode }),
+                body: JSON.stringify({ mode, minMatchScore }),
             });
 
             const data = await res.json();
@@ -209,15 +189,39 @@ export default function MergeProgress() {
                         </p>
                     </div>
 
-                    {/* Mode Selector */}
-                    <div className="flex items-center gap-3">
+                    {/* Mode & Sensitivity Selector */}
+                    <div className="flex flex-col md:flex-row items-center gap-6">
+                        {/* Sensitivity Slider */}
+                        <div className="flex flex-col gap-1 min-w-[200px]">
+                            <div className="flex items-center justify-between text-xs font-semibold">
+                                <span className="text-slate-400">Độ nhạy (Match Score)</span>
+                                <span className={minMatchScore > 0.8 ? 'text-amber-400' : 'text-emerald-400'}>
+                                    {Math.round(minMatchScore * 100)}%
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.5"
+                                max="0.95"
+                                step="0.05"
+                                value={minMatchScore}
+                                onChange={(e) => setMinMatchScore(parseFloat(e.target.value))}
+                                disabled={isRunning}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                            />
+                            <div className="flex justify-between text-[10px] text-slate-500">
+                                <span>Lỏng (Nhiều)</span>
+                                <span>Chặt (Ít)</span>
+                            </div>
+                        </div>
+
                         <div className="flex bg-slate-800 rounded-xl p-1">
                             <button
                                 onClick={() => setMode('incremental')}
                                 disabled={isRunning}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'incremental'
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'text-slate-400 hover:text-white'
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'text-slate-400 hover:text-white'
                                     }`}
                             >
                                 Tăng dần
@@ -226,8 +230,8 @@ export default function MergeProgress() {
                                 onClick={() => setMode('fresh')}
                                 disabled={isRunning}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'fresh'
-                                        ? 'bg-orange-600 text-white'
-                                        : 'text-slate-400 hover:text-white'
+                                    ? 'bg-orange-600 text-white'
+                                    : 'text-slate-400 hover:text-white'
                                     }`}
                             >
                                 Làm mới
@@ -238,8 +242,8 @@ export default function MergeProgress() {
                             onClick={handleStart}
                             disabled={isRunning}
                             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${isRunning
-                                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
                                 }`}
                         >
                             {isRunning ? (
