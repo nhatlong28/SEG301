@@ -25,3 +25,25 @@
 3. Implementing Vietnamese Word Segmentation (Tách từ).
 4. Generating Data Insights report for Milestone 1.
 Ensured the AI Log is strictly filtered for the `Caodulieu` project.
+
+**Task:** Search Engine Core Implementation (SPIMI & BM25)
+
+**User:** Request to code the core Search Engine modules:
+1. Module Indexer (SPIMI) - 1M records, RAM constraint, K-Way Merge.
+2. Module Ranking (BM25) - Vectorized NumPy implementation.
+3. Retrieval Mechanism (Seek & Offset) - efficient binary reading.
+4. System Integration - connection pipeline.
+
+**AI:** Implemented the full pipeline:
+- `src/crawler/parser.py`: Generator for Supabase data.
+- `src/indexer/spimi.py`: SPIMI algorithm with 100MB block limit and metadata saving.
+- `src/indexer/merging.py`: K-Way Merge logic for binary blocks.
+- `src/indexer/reader.py`: Optimized `IndexReader` using `seek()` and `read()`.
+- `src/ranking/bm25.py`: High-performance vectorized BM25 using NumPy.
+- `main.py`: CLI for building index (`--index`) and searching (`--search`).
+
+**User:** Created `requirements.txt` and installed dependencies after a `ModuleNotFoundError`.
+
+**AI:**
+- Created `requirements.txt` with: `python-dotenv`, `psycopg2-binary`, `numpy`.
+- Executed `pip install -r requirements.txt` to resolve missing dependencies.
