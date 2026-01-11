@@ -1,8 +1,13 @@
 node_modules/
+
 dist/
 .env
 .env.local
-.DS_Store
+lazada_cookie.txt
 *.log
-# data/ # Commented out, but usually we exclude data. I'll exclude it to be safe unless user asked key data.
-data/
+.gemini/
+brain/
+.agent/
+*.webp
+*.png
+*.jpg
