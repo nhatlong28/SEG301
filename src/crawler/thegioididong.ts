@@ -1,0 +1,219 @@
+import { Page } from 'puppeteer';
+import { PuppeteerCrawlerBase, PuppeteerCrawlOptions } from './puppeteerBase';
+import { CrawledProduct, CrawlRequest } from './base';
+import { CategoryService, CategoryNode } from './categoryService';
+import { KeywordService } from './keywordService';
+import logger from '../utils/logger';
+import * as cheerio from 'cheerio';
+
+export class ThegioididongCrawler extends PuppeteerCrawlerBase {
+    private readonly baseUrl = 'https://www.thegioididong.com';
+    private readonly apiUrl = 'https://www.thegioididong.com/Category/FilterProductBox';
+
+    constructor() {
+        super('thegioididong', { rateLimit: 2 });
+    }
+
+    /**
+     * Resolve Category ID from Slug using functionality injected into Browser
+     */
+    private async resolveCategoryId(page: Page, slug: string): Promise<string | null> {
+        try {
+            await page.goto(`${this.baseUrl}/${slug}`, { waitUntil: 'domcontentloaded' });
+
+            return await page.evaluate(() => {
+                // Method 1: cateID variable
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
+                if (window.cateID) return String(window.cateID);
+
+                // Method 2: Hidden Input
+                const hidden = document.querySelector('#hdCateId');
+                if (hidden && hidden.getAttribute('value')) return hidden.getAttribute('value');
+
+                // Method 3: Class name __cate_123
+                const bodyHtml = document.body.innerHTML;
+                const match = bodyHtml.match(/class="[^"]*__cate_(\d+)/);
+                if (match) return match[1];
+
+                return null;
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Inject AJAX POST to FilterProductBox
+     */
+    private async fetchAjaxApi(page: Page, categoryId: string, pageIndex: number): Promise<string> {
+        return page.evaluate(async (url, cid, pi) => {
+            try {
+                // Must form-encode body
+                const body = new URLSearchParams();
+                body.append('IsParentCate', 'False');
+                body.append('prevent', 'true');
+                // The API needs 'c' (Category) and 'pi' (PageIndex) in the Query Params typically,
+                // BUT implementation varies. Benchmarks show it works with Query Params + POST body.
+
+                const response = await fetch(`${url}?c=${cid}&pi=${pi}&o=13`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: body.toString()
+                });
+
+                if (!response.ok) return '';
+                const json = await response.json();
+                return json.listproducts || ''; // Contains HTML
+            } catch (e) {
+                return '';
+            }
+        }, this.apiUrl, categoryId, pageIndex);
+    }
+
+    /**
+     * Crawl a specific category by slug
+     */
+    async crawlCategory(categorySlug: string, maxPages: number = 20): Promise<CrawledProduct[]> {
+        return this.crawl({ categorySlug, maxPages });
+    }
+
+    async crawl(options: CrawlRequest = {}): Promise<CrawledProduct[]> {
+        await this.initialize();
+        const page = await this.getPage();
+
+        const categorySlug = options.categorySlug || options.category || 'dien-thoai';
+        const maxPages = options.maxPages || 20;
+        const products: CrawledProduct[] = [];
+        const logId = await this.createCrawlLog();
+
+        logger.info(`[Thegioididong] 🚀 Starting Puppeteer Crawl: Cat=${categorySlug}`);
+
+        // 1. Resolve Category ID
+        const categoryId = await this.resolveCategoryId(page, categorySlug);
+        if (!categoryId) {
+            logger.error(`[Thegioididong] Could not resolve ID for ${categorySlug}`);
+            await this.releaseBrowser();
+            return [];
+        }
+        logger.info(`[Thegioididong] Resolved ID: ${categoryId}`);
+
+        // 2. Iterate Pages
+        let totalSaved = 0;
+
+        for (let i = 0; i < maxPages; i++) {
+            if (this.shouldStop) break;
+
+            logger.info(`[Thegioididong] API Page ${i} for Cat ${categoryId}`);
+            const htmlFragment = await this.fetchAjaxApi(page, categoryId, i);
+
+            if (!htmlFragment || htmlFragment.length < 50) {
+                logger.info('[Thegioididong] Empty response, stopping.');
+                break;
+            }
+
+            // Parse with Cheerio (lightweight)
+            const items = this.parseListingPage(htmlFragment);
+            if (items.length === 0) break;
+
+            products.push(...items);
+
+            if (products.length >= 100) {
+                const toSave = products.splice(0, products.length);
+                const { inserted, updated } = await this.saveProducts(toSave);
+                totalSaved += inserted + updated;
+                await this.updateCrawlLog(logId, { total: totalSaved, newItems: inserted, updated: updated, errors: 0 }, false);
+            }
+
+            await this.sleep(1000);
+        }
+
+        // Final save
+        if (products.length > 0) {
+            const { inserted, updated } = await this.saveProducts(products);
+            totalSaved += inserted + updated;
+        }
+
+        await this.updateCrawlLog(logId, { total: totalSaved, newItems: 0, updated: 0, errors: 0 });
+        await this.releaseBrowser();
+        return products;
+    }
+
+    // Reuse the parsing logic from before, but stripped down
+    private parseListingPage(html: string): CrawledProduct[] {
+        const products: CrawledProduct[] = [];
+        const $ = cheerio.load(html);
+
+        $('.item, .product-item, .listproduct li').each((_, el) => {
+            const $el = $(el);
+            const name = $el.find('h3, .name').text().trim();
+            const price = parseInt($el.find('.price, strong').text().replace(/[^\d]/g, ''));
+            const id = $el.attr('data-id') || $el.find('a').attr('href');
+
+            if (name && price) {
+                products.push({
+                    externalId: id || name, // Fallback
+                    name,
+                    price,
+                    available: true,
+                    externalUrl: this.baseUrl + ($el.find('a').attr('href') || ''),
+                } as any);
+            }
+        });
+
+        return products;
+    }
+
+    async massCrawl(options: { pagesPerCategory?: number } = {}): Promise<CrawledProduct[]> {
+        logger.info(`[Thegioididong] 🚀 Starting SMART EXHAUSTIVE Crawl...`);
+        const maxPages = options.pagesPerCategory || 100;
+        const allProducts: CrawledProduct[] = [];
+
+        await this.initialize();
+        const { CrawlProgressService } = await import('./crawlProgressService');
+
+        while (!this.shouldStop) {
+            // 1. Lấy mục tiêu từ Database
+            const dbCategories = await CategoryService.getCategories(this.sourceId);
+            const dbKeywords = await KeywordService.getKeywordStrings('thegioididong', undefined, 24);
+
+            // 2. Lọc danh mục chưa cào
+            const uncrawledCats = await CrawlProgressService.getUncrawledCategories(this.sourceId, dbCategories, 24);
+            const uncrawledKeys = await CrawlProgressService.getUncrawledKeywords(this.sourceId, dbKeywords, 24);
+
+            if (uncrawledCats.length === 0 && uncrawledKeys.length === 0) {
+                logger.info(`[Thegioididong] ✅ Đã cào sạch sàn. Nghỉ 1 tiếng...`);
+                for (let i = 0; i < 60 && !this.shouldStop; i++) await this.sleep(60000);
+                continue;
+            }
+
+            logger.info(`[Thegioididong] 🎯 Mục tiêu: ${uncrawledCats.length} danh mục, ${uncrawledKeys.length} từ khóa`);
+
+            // 3. Cào Danh mục
+            for (const cat of uncrawledCats) {
+                if (this.shouldStop) break;
+                logger.info(`[Thegioididong] 📂 Vét cạn danh mục: ${cat.name}`);
+                const products = await this.crawl({ category: cat.slug, maxPages: maxPages });
+                allProducts.push(...products);
+                await this.sleep(10000);
+            }
+
+            // 4. Cào Từ khóa
+            for (const kw of uncrawledKeys) {
+                if (this.shouldStop) break;
+                logger.info(`[Thegioididong] 🔍 Vét cạn từ khóa: ${kw}`);
+                const products = await this.crawl({ query: kw, maxPages: 20 });
+                allProducts.push(...products);
+                await this.sleep(10000);
+            }
+
+            logger.info(`[Thegioididong] 🔄 Kết thúc vòng. Tổng: ${allProducts.length}`);
+            await this.sleep(30000);
+        }
+
+        return allProducts;
+    }
+}

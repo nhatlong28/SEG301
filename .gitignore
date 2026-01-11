@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.local
+.DS_Store
+*.log
+# data/ # Commented out, but usually we exclude data. I'll exclude it to be safe unless user asked key data.
+data/

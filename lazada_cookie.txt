@@ -1,0 +1,47 @@
+# Netscape HTTP Cookie File
+# http://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file!  Do not edit.
+
+www.lazada.vn	FALSE	/tag/%C4%91%E1%BB%93-1k-free-ship-0%C4%91	FALSE	1783230735	__wpkreporterwid_	f1974f8e-7b5d-4941-3e11-fbcc7e5cdf4c
+my.lazada.vn	FALSE	/api/recentOrders	FALSE	0	client_type	desktop
+www.lazada.vn	FALSE	/products	FALSE	1796778809	_uab_collina	176221880938538207099203
+www.lazada.vn	FALSE	/products	FALSE	1777770809	__wpkreporterwid_	c9a49fdc-648b-41bb-2c29-2801c54f0a37
+cart.lazada.vn	FALSE	/cart/api	FALSE	0	client_type	desktop
+www.lazada.vn	FALSE	/catalog	FALSE	1783234546	__wpkreporterwid_	70540275-cffd-418d-3549-b4b24b766f94
+www.lazada.vn	FALSE	/shop	FALSE	1783234503	__wpkreporterwid_	3899be8c-3366-4a23-a0d4-72b8efc33e43
+.lazada.vn	TRUE	/	FALSE	1802711018	miidlaz	miidgg2q061j966q62e5btt
+.lazada.vn	TRUE	/	TRUE	1796778809	t_fv	1762218809053
+.lazada.vn	TRUE	/	TRUE	1796778809	t_uid	XU4vAiINQXT1V8JtlM4OOVdEeghfQQnF
+.lazada.vn	TRUE	/	FALSE	1783703066	lwrid	AgGaTG0W6ig2zNflM%2BcjX39uIwDz
+.lazada.vn	TRUE	/	TRUE	1793783609	lzd_cid	15c0e0df-24d2-45ac-a8a1-e92b1dea2b2b
+.lazada.vn	TRUE	/	TRUE	1796778809	cna	OkGQITaSlWkCASpy2i3IRZE9
+www.lazada.vn	FALSE	/	TRUE	1783617730	__itrace_wid	2c5612b0-272c-4d3d-9061-a10ff79ed3d4
+.lazada.vn	TRUE	/	FALSE	1770263766	hng	VN|en|VND|704
+www.lazada.vn	FALSE	/	FALSE	1770263766	userLanguageML	en
+www.lazada.vn	FALSE	/	FALSE	1783234505	_bl_uid	v2m6Ck3v2zO8k5ikRuOhd5C5tsnk
+.lazada.vn	TRUE	/	FALSE	1775458506	_gcl_au	1.1.1321666420.1767682506
+.lazada.vn	TRUE	/	FALSE	1802711022	_ga	GA1.2.1333330753.1767682507
+.lazada.vn	TRUE	/	TRUE	1768217407	xlly_s	1
+.lazada.vn	TRUE	/	FALSE	1802583760	AMCV_126E248D54200F960A4C98C6%40AdobeOrg	-1124106680%7CMCIDTS%7C20464%7CMCMID%7C55963189892656116253614218999552108947%7CMCAAMLH-1768628560%7C3%7CMCAAMB-1768628560%7CRKhpRz8krg2tLO6pguXWp5olkAcUniQYPHaMWWgdJ3xzPWQmdj0y%7CMCOPTOUT-1768030960s%7CNONE%7CvVersion%7C5.2.0
+.lazada.vn	TRUE	/	TRUE	1768753850	_m_h5_tk	d155a48861f39521e457ef5f268181c7_1768159131598
+.lazada.vn	TRUE	/	TRUE	1768753850	_m_h5_tk_enc	58d31892eaba1686e457ba55669ccff2
+.lazada.vn	TRUE	/	TRUE	0	lzd_sid	1e5ebeafea410b56902d855093b385be
+.lazada.vn	TRUE	/	TRUE	0	_tb_token_	e1a3e36ebe833
+.lazada.vn	TRUE	/	FALSE	1783701051	lwrtk	AAIEaWRAurXFT87iavNO+7z33fz/JoMYWYv9iDpMBrUPF0NuMJg7MiM=
+.lazada.vn	TRUE	/	FALSE	1768152866	t_sid	1mgBCYoIq9LvsLXQIAQpnNQMbpW9NL2T
+.lazada.vn	TRUE	/	FALSE	1768152866	utm_channel	NA
+c.lazada.vn	FALSE	/	FALSE	0	XSRF-TOKEN	134cd945-e594-4422-8093-ea19fbfa985b
+c.lazada.vn	FALSE	/	FALSE	0	JSESSIONID	DF103F324D870B46C7CF55C49FD795C7
+.lazada.vn	TRUE	/	FALSE	0	exlaz	c_lzd_byr:mm_150471256_51803046_2010753049!vn1415006:clkgk27aa1jen06sl24env::
+.lazada.vn	TRUE	/	FALSE	1802711018	lzd_click_id	clkgk27aa1jen06sl24env
+.lazada.vn	TRUE	/	FALSE	0	clkgk27aa1jen06sl24env_click_time	1768151019870
+.lazada.vn	TRUE	/	TRUE	1768152819	utm_r_s	accesstrade
+.lazada.vn	TRUE	/	TRUE	1768152819	utm_origin	https://click.accesstrade.vn/
+.lazada.vn	TRUE	/	FALSE	1768237422	_gid	GA1.2.438836869.1768151022
+.lazada.vn	TRUE	/	FALSE	1768151081	_gat_UA-30172376-1	1
+.lazada.vn	TRUE	/	FALSE	1768237422	_uetsid	7b518b00ef0f11f0b59f6d28516c4c92
+.lazada.vn	TRUE	/	FALSE	1801847022	_uetvid	a2c662a0eacc11f0932a43e41be9ecf3
+.lazada.vn	TRUE	/	FALSE	1802711022	_ga_3V5EYPLJ14	GS2.2.s1768151022$o11$g1$t1768151022$j60$l0$h0
+.lazada.vn	TRUE	/	FALSE	1783703066	epssw	11*mmLfymj-SXRefRAzBomkGm4ZykpoKN5ptyDWkMx_p4xeAm96GqhtlkkVNecXhQD6hPoKqTtBKSTN73mimTEHz2mmOfevQEAZmTmYV_buIJ4-aOb5LbmQQObHEB1n_WRcBJmvAMLWnVHBbsTinXV7sGI4ENyQ-vK0artR7hz5Vo8je1D7meZ7u5SgoGs8Gd_z2vYg33GZiqnNmC2ErimEBqM4uvgEAjemOiEE5s0TmmEC1plhmoLrGr6niammmmXmjimmqBBE4m7v1RjHEmBapdLvBjeezucuBjarNBBmBjvuu03BE5XuNBBmNjPYsxF58ctBD4A62C56h_amEm..
+.lazada.vn	TRUE	/	TRUE	1783703067	isg	BHh4l9vTZbg2LolWMeAX9pDKSSYK4dxrO5Hu6rLpxLNmzRi3WvGs-47vgd39hpRD
+.lazada.vn	TRUE	/	TRUE	1783703067	tfstk	gcPj_ODcInxbou_AXn7yVy3cNCh1Ya5eGFgT-Pd2WjhvXhUK4f7DQt0s10aEQmIb18A_-PVVof7mirci6MSFTfa0ofxrbsWG4zQtSfgxwcHC_rci6gSFT6z0oorMxsNx6aG-W2-t6Vh9eagZ5dhtDAKJe2n-XfETXzQSS0nt6fETyagi2chtdRTI5ti0lwrz0kLq6DUxVCd6qqMxv6mW6CFSlHoLk9A967gjH7a_zET-3RUnKSPA1Qc4R8h-r5SkMcw-RPl71iAqjj3nKJkWDZ04Bz2tmWs6OmF0F5Gz9GAUAor8TfPA7LZKCmw8MYT96blbFlws93QouRUuBmVCfBiYizwEC-jBKkUz8SDu1Mt-j-unw4VNqIn_eVIyTBoIRPp6PvAsPD75PdviFnqijaQW2bDxrqMPPatYIx3oPD75PdviH40jUa_WDRf..
