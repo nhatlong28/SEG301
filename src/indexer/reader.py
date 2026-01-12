@@ -2,7 +2,7 @@ import pickle
 import os
 
 class IndexReader:
-    def __init__(self, index_file="final_index.bin", lexicon_file="lexicon.dat"):
+    def __init__(self, index_file="src/indexer/final_index.bin", lexicon_file="src/indexer/lexicon.dat"):
         self.index_path = index_file
         self.lexicon_path = lexicon_file
         self.lexicon = {}

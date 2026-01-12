@@ -66,8 +66,6 @@ class SPIMIIndexer:
         # Sort terms
         sorted_terms = sorted(self.dictionary.keys())
         
-        # We can write just the list of (term, posting_list) to make it easier to merge
-        # Or write the dict. Writing sorted list is better for merging.
         block_data = []
         for term in sorted_terms:
             block_data.append((term, self.dictionary[term]))

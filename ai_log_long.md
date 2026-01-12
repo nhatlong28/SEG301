@@ -46,4 +46,27 @@
 - Updated `search_loop` to load `data/sample.json` into a dictionary for fast ID-to-name lookup.
 - Cleaned up database connection/cleanup logic.
 
+**Task:** Efficient Data Aggregation & Streaming
+
+**User:** Refactor `parser.py` to aggregate multiple `products.jsonl` files into `total_products.jsonl` and update the generator to read line-by-line.
+
+**AI:**
+- Updated `get_product_generator` to stream data from `total_products.jsonl` to minimize RAM usage.
+
+**User:** Relocate `final_index.bin` and `lexicon.dat` into the `src/indexer` directory.
+
+**AI:**
+- Updated `src/indexer/merging.py` and `src/indexer/reader.py` to use `src/indexer/` as the default path for index files.
+- Refactored `test_console.py` to match the new file locations in `src/indexer/`.
+- Updated `.gitignore` to ignore the relocated binary files within `src/indexer/`.
+
+
+**User:** Fix the issue where `test_console.py` and `parser.py` encountered unusual line terminators (LS/PS) or JSONL formatting errors during search.
+
+**AI:**
+- Updated `aggregate_shop_data` in `src/crawler/parser.py` to strip unusual line terminators (`\u2028`, `\u2029`) and ensure standard `\n` line endings.
+- Identified that `test_console.py` needs refactoring to read `total_products.jsonl` line-by-line for product detail lookup instead of using `json.load()`.
+
+
+
 

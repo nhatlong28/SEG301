@@ -3,7 +3,7 @@ import os
 import heapq
 from contextlib import ExitStack
 
-def merge_blocks(block_dir="output_blocks", output_file="final_index.bin", lexicon_file="lexicon.dat"):
+def merge_blocks(block_dir="output_blocks", output_file="src/indexer/final_index.bin", lexicon_file="src/indexer/lexicon.dat"):
     """
     Performs K-Way Merge on block files.
     """
@@ -19,18 +19,12 @@ def merge_blocks(block_dir="output_blocks", output_file="final_index.bin", lexic
         print("Loading blocks for merging...")
         iterators = []
         for f in files:
-            # Check if file is empty
             try:
-                data = pickle.load(f) # Loads the entire list :| 
-                # Ideally we want an iterator over this list.
+                data = pickle.load(f)
                 iterators.append(iter(data)) 
             except EOFError:
                 continue
 
-        # Priority Queue for K-Way Merge: (term, doc_id_of_block, posting, iterator_index)
-        # We need to merge postings for the SAME term.
-        # heap element: (term, postings, iterator_id)
-        
         heap = []
         for i, it in enumerate(iterators):
             try:
@@ -42,7 +36,6 @@ def merge_blocks(block_dir="output_blocks", output_file="final_index.bin", lexic
         lexicon = {}
         offset = 0
         
-        # Open final index for writing
         with open(output_file, 'wb') as out_f:
             current_term = None
             current_postings = {}
@@ -54,13 +47,8 @@ def merge_blocks(block_dir="output_blocks", output_file="final_index.bin", lexic
                     current_term = term
                     current_postings = postings
                 elif term == current_term:
-                    # Merge postings (doc_ids should be unique across calls if blocks are partitioned by docs, 
-                    # but SPIMI partitions by TIME/Memory. A term can appear in multiple blocks.
-                    # We merge the dictionaries.
                     current_postings.update(postings)
                 else:
-                    # New term saw, write the old term
-                    # Serialize postings
                     data_bytes = pickle.dumps(current_postings)
                     length = len(data_bytes)
                     

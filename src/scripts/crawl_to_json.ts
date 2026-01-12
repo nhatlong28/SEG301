@@ -20,6 +20,7 @@ import logger from '../utils/logger';
 
 import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import * as cheerio from 'cheerio';
 
 puppeteerExtra.use(StealthPlugin());
 
@@ -522,15 +523,19 @@ async function runLazada() {
     console.log(`📊 Found ${keywords.length} keywords to crawl\n`);
 
     // Use puppeteer-extra for stealth
-    // Launch Browser and handle Login if needed
+    // Launch Browser in HEADFUL mode to avoid bot detection
+    console.log('   💡 Running in HEADFUL mode (có cửa sổ browser) để bypass bot detection');
+    console.log('   ⚠️ Không đóng cửa sổ Chrome! Nếu có captcha, giải nó rồi crawler sẽ tự chạy tiếp.\n');
+
     let browser = await puppeteerExtra.launch({
-        headless: true,
+        headless: false, // HEADFUL MODE - visible browser window
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-blink-features=AutomationControlled',
-            '--window-size=1920,1080'
+            '--window-size=1366,768',
+            '--window-position=50,50'
         ],
         protocolTimeout: 0,
         defaultViewport: null
@@ -609,23 +614,72 @@ async function runLazada() {
         return false;
     };
 
-    // Helper to handle Captcha/Login
-    const handleCaptcha = async () => {
-        console.log('\n   ⛔ CAPTCHA/BOT DETECTION DETECTED!');
+    // Track cookie file modification for hot-reload
+    const cookiePath = path.join(process.cwd(), 'lazada_cookie.txt');
+    const uaPath = path.join(process.cwd(), 'lazada_ua.txt');
+    let lastCookieMtime = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
+    let lastUAMtime = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
+
+    // Hot-reload cookies if file changed - call this before each page request
+    const checkAndReloadCookies = async (): Promise<boolean> => {
+        try {
+            const currentCookieMtime = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
+            const currentUAMtime = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
+
+            if (currentCookieMtime > lastCookieMtime || currentUAMtime > lastUAMtime) {
+                console.log('   🔄 Cookie/UA file changed! Hot-reloading...');
+
+                // Clear existing cookies
+                const existingCookies = await page.cookies();
+                for (const c of existingCookies) {
+                    await page.deleteCookie(c);
+                }
+
+                // Update User-Agent if changed
+                if (currentUAMtime > lastUAMtime) {
+                    await page.setUserAgent(loadUserAgent());
+                    console.log('   ✨ User-Agent updated');
+                }
+
+                // Load new cookies
+                await loadCookies(page);
+
+                lastCookieMtime = currentCookieMtime;
+                lastUAMtime = currentUAMtime;
+
+                console.log('   ✅ Hot-reload complete! Resuming crawl...');
+                return true; // Signal that cookies were reloaded
+            }
+        } catch (e) {
+            console.error('   ⚠️ Hot-reload error:', e);
+        }
+        return false;
+    };
+
+
+    // Helper to handle Captcha/Login - WITH POPUP BROWSER
+    let captchaRetryCount = 0;
+    const MAX_CAPTCHA_RETRIES = 5;
+
+    const handleCaptcha = async (): Promise<boolean> => {
+        captchaRetryCount++;
+
+        if (captchaRetryCount > MAX_CAPTCHA_RETRIES) {
+            console.log('\n   ❌ Max retries reached. Lazada blocking is too aggressive.');
+            console.log('   💡 TIP: Thử chạy lại sau 30 phút hoặc đổi IP (VPN/Mobile data)');
+            return false;
+        }
+
+        console.log(`\n   ⛔ CAPTCHA/BOT DETECTION! (Retry ${captchaRetryCount}/${MAX_CAPTCHA_RETRIES})`);
         console.log('   ═══════════════════════════════════════════════════');
-        console.log('   👉 CÁCH 1: Cập nhật thủ công (KHUYÊN DÙNG)');
-        console.log('      1. Mở trình duyệt của bạn, vào Lazada.vn và giải captcha/đăng nhập.');
-        console.log('      2. Copy Cookie và dán vào file: lazada_cookie.txt');
-        console.log('      3. Copy User-Agent và dán vào file: lazada_ua.txt');
-        console.log('      (Tool sẽ tự động nhận diện khi file thay đổi)');
-        console.log('\n   👉 CÁCH 2: Dùng trình duyệt tự động (Popup)');
-        console.log('      Giải quyết trực tiếp trên cửa sổ trình duyệt sắp mờ ra.');
+        console.log('   🚀 Mở trình duyệt tự động...');
+        console.log('   👉 Vui lòng đăng nhập hoặc giải captcha trên cửa sổ popup');
         console.log('   ═══════════════════════════════════════════════════\n');
 
+        // Close headless browser
         try { await browser.close(); } catch { }
 
-        // Relaunch Headful
-        console.log('   🚀 Opening browser window for manual intervention...');
+        // Open headful browser for manual intervention
         browser = await puppeteerExtra.launch({
             headless: false,
             defaultViewport: null,
@@ -635,75 +689,100 @@ async function runLazada() {
         await page.setUserAgent(loadUserAgent());
 
         try {
-            await page.goto('https://www.lazada.vn', { waitUntil: 'domcontentloaded' });
+            await page.goto('https://www.lazada.vn', { waitUntil: 'domcontentloaded', timeout: 30000 });
         } catch { }
 
-        const cookiePath = path.join(process.cwd(), 'lazada_cookie.txt');
-        const uaPath = path.join(process.cwd(), 'lazada_ua.txt');
-        let initialCookieStat = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
-        let initialUAStat = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
+        // Track file changes for manual update option
+        const initialCookieMtime = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
+        const initialUAMtime = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
 
-        // Wait for user or detect file changes
-        console.log('   ⏳ Waiting for valid session (File update or Popup login)...');
+        console.log('   ⏳ Đợi đăng nhập hoặc file thay đổi... (timeout 10 phút)');
 
-        await new Promise<void>((resolve) => {
-            const checkInterval = setInterval(async () => {
-                try {
-                    if (!browser.isConnected()) {
-                        clearInterval(checkInterval);
-                        resolve();
-                        return;
+        const startTime = Date.now();
+        const timeoutMs = 10 * 60 * 1000; // 10 minutes
+        let startTimeSuccess = 0;
+
+
+        while (Date.now() - startTime < timeoutMs) {
+            await sleep(3000);
+
+            // Check if browser was closed
+            if (!browser.isConnected()) {
+                console.log('   ⚠️ Browser closed by user.');
+                break;
+            }
+
+            // Check for manual file update
+            const currentCookieMtime = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
+            const currentUAMtime = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
+            if (currentCookieMtime > initialCookieMtime || currentUAMtime > initialUAMtime) {
+                console.log('   ✨ File change detected! Using manual cookies.');
+                break;
+            }
+
+            // Check if user logged in successfully
+            try {
+                const cookies = await page.cookies();
+                const url = page.url();
+                const invalidTerms = ['login', 'Security', 'punish', 'captcha', 'challenge'];
+                const isInvalidUrl = invalidTerms.some(term => url.includes(term));
+
+                // Strict check: Must be on homepage or valid catalog/product page
+                // Relaxed: Just check if we are on lazada domain and NOT on a blocked page
+                const isValidPage = url.includes('lazada.vn');
+
+                if (cookies.length > 15 && !isInvalidUrl && isValidPage) {
+                    if (!startTimeSuccess) startTimeSuccess = Date.now();
+
+                    // Require 5 seconds of STABLE valid state
+                    if (Date.now() - startTimeSuccess > 5000) {
+                        console.log('   ✅ Valid session stable for 5s! Saving cookies...');
+
+                        // Save cookies in NETSCAPE format
+                        const netscapeCookies = ['# Netscape HTTP Cookie File', '# Auto-generated by crawler'];
+                        for (const c of cookies) {
+                            const domain = c.domain.startsWith('.') ? c.domain : `.${c.domain}`;
+                            const flag = c.domain.startsWith('.') ? 'TRUE' : 'FALSE';
+                            const path = c.path || '/';
+                            const secure = c.secure ? 'TRUE' : 'FALSE';
+                            const expires = c.expires ? Math.floor(c.expires) : 0;
+                            netscapeCookies.push(`${domain}\t${flag}\t${path}\t${secure}\t${expires}\t${c.name}\t${c.value}`);
+                        }
+                        fs.writeFileSync(cookiePath, netscapeCookies.join('\n'));
+                        console.log(`   💾 Saved ${cookies.length} cookies to lazada_cookie.txt`);
+                        captchaRetryCount = 0; // Reset on success
+                        break;
+                    } else {
+                        // Ensure we don't spam logs
+                        if (Math.random() < 0.1) console.log('   ⏳ Verifying session stability...');
                     }
-
-                    // Check for file changes (MANUAL UPDATE)
-                    const currentCookieStat = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
-                    const currentUAStat = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
-
-                    if (currentCookieStat !== initialCookieStat || currentUAStat !== initialUAStat) {
-                        console.log(`   ✨ File change detected! Applying new settings...`);
-                        clearInterval(checkInterval);
-                        resolve();
-                        return;
-                    }
-
-                    // Check for browser login (POPUP UPDATE)
-                    const cookies = await page.cookies();
-                    const url = page.url();
-                    if (cookies.length > 10 && !url.includes('login') && !url.includes('Security') && !url.includes('punish')) {
-                        const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-                        fs.writeFileSync(cookiePath, cookieString);
-                        console.log(`   ✅ Login detected in popup! Saved cookies.`);
-                        clearInterval(checkInterval);
-                        resolve();
-                    }
-                } catch (e) {
-                    clearInterval(checkInterval);
-                    resolve();
+                } else {
+                    startTimeSuccess = 0; // Reset timer if state becomes invalid
                 }
-            }, 2000);
-        });
+            } catch {
+                startTimeSuccess = 0;
+            }
+        }
 
-        console.log('   🔄 Restarting Crawler in Headless mode...');
-        try { await browser.close(); } catch { }
-        await sleep(2000);
+        // Update tracking timestamps
+        lastCookieMtime = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
+        lastUAMtime = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
 
-        // Relaunch Headless
-        browser = await puppeteerExtra.launch({
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-blink-features=AutomationControlled',
-                '--window-size=1920,1080'
-            ],
-            protocolTimeout: 0,
-            defaultViewport: null
-        });
-        page = await browser.newPage();
-        await page.setUserAgent(loadUserAgent());
-        await page.setViewport({ width: 1920, height: 1080 });
+        // Reload cookies and continue (still in headful mode)
         await loadCookies(page);
+
+        console.log('   ⏳ Warming up session (3s)...');
+        await sleep(3000);
+
+        try {
+            await page.goto('https://www.lazada.vn', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await sleep(2000);
+        } catch { }
+
+        console.log('   ✅ Ready! Resuming crawl...\n');
+        return true;
     };
+
 
     await page.setUserAgent(loadUserAgent());
     await page.setViewport({ width: 1920, height: 1080 });
@@ -750,7 +829,11 @@ async function runLazada() {
             const url = `https://www.lazada.vn${category}/?page=${pageNum}&ajax=true`;
 
             try {
+                // Hot-reload cookies if file changed
+                await checkAndReloadCookies();
+
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
 
                 // Check blocked
                 const title = await page.title();
@@ -857,7 +940,11 @@ async function runLazada() {
             const searchUrl = `https://www.lazada.vn/catalog/?q=${encodeURIComponent(kw.keyword)}&page=${pageNum}&ajax=true`;
 
             try {
+                // Hot-reload cookies if file changed
+                await checkAndReloadCookies();
+
                 await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
 
                 // Check if blocked
                 const title = await page.title();
@@ -948,18 +1035,14 @@ async function runLazada() {
 }
 
 // =============================================
-// DIENMAYXANH CRAWLER (AJAX POST)
-// =============================================
-// =============================================
-// DIENMAYXANH CRAWLER (API MODE)
+// DIENMAYXANH CRAWLER (PUPPETEER + CLICK PAGINATION)
 // =============================================
 async function runDMX() {
     const SOURCE = 'dienmayxanh';
     const SOURCE_ID = 5;
     const BASE_URL = 'https://www.dienmayxanh.com';
-    const SEARCH_API_URL = 'https://www.dienmayxanh.com/Category/FilterProductBox';
 
-    console.log('\n🚀 DIENMAYXANH CRAWLER (API Mode)');
+    console.log('\n🚀 DIENMAYXANH CRAWLER (Puppeteer + Click Mode)');
     console.log('═══════════════════════════════════════════════════\n');
 
     const ids = loadExistingIds(SOURCE);
@@ -977,10 +1060,70 @@ async function runDMX() {
 
     const browser = await puppeteerExtra.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1366, height: 768 });
+
+    // Helper: Extract products from current page via Puppeteer
+    const extractProducts = async (): Promise<CrawledProduct[]> => {
+        return await page.evaluate((baseUrl) => {
+            const items: any[] = [];
+            document.querySelectorAll('.listproduct li.item, li.item.ajaxed').forEach((el) => {
+                const link = el.querySelector('a');
+                if (!link) return;
+
+                const name = link.getAttribute('data-name') || el.querySelector('h3, .name')?.textContent?.trim() || '';
+                const price = parseInt(link.getAttribute('data-price') || '0') || 0;
+                const id = el.getAttribute('data-id') || link.getAttribute('data-id') || '';
+                const brand = link.getAttribute('data-brand') || '';
+                const category = link.getAttribute('data-cate') || '';
+                let href = link.getAttribute('href') || '';
+                if (href && !href.startsWith('http')) {
+                    href = baseUrl + (href.startsWith('/') ? '' : '/') + href;
+                }
+                const img = el.querySelector('img');
+                const imageUrl = img?.getAttribute('data-src') || img?.getAttribute('src') || '';
+
+                if (name && price > 0 && id) {
+                    items.push({
+                        externalId: id,
+                        externalUrl: href,
+                        name,
+                        price,
+                        imageUrl,
+                        brand,
+                        category,
+                        available: true
+                    });
+                }
+            });
+            return items;
+        }, BASE_URL) as CrawledProduct[];
+    };
+
+    // Helper: Click "Xem thêm" button and wait for new content
+    const clickLoadMore = async (): Promise<boolean> => {
+        try {
+            const btn = await page.$('.view-more a, .viewmore a');
+            if (!btn) return false;
+
+            const isVisible = await page.evaluate((el) => {
+                const rect = el.getBoundingClientRect();
+                return rect.height > 0 && rect.width > 0;
+            }, btn);
+            if (!isVisible) return false;
+
+            const countBefore = await page.$$eval('.listproduct li.item, li.item.ajaxed', els => els.length);
+            await btn.click();
+            await sleep(1500);
+            const countAfter = await page.$$eval('.listproduct li.item, li.item.ajaxed', els => els.length);
+            return countAfter > countBefore;
+        } catch (e) {
+            return false;
+        }
+    };
 
     for (let i = 0; i < keywords.length; i++) {
         const kw = keywords[i];
@@ -991,196 +1134,57 @@ async function runDMX() {
         let kwProducts = 0;
 
         try {
-            // Step 1: Get Initial Page for params via Fetch (Faster)
-            const searchUrl = `${BASE_URL}/tim-kiem?key=${encodeURIComponent(kw.keyword.replace(/ /g, '+'))}`;
-            let html = '';
-            let finalUrl = searchUrl;
+            const searchUrl = `${BASE_URL}/tim-kiem?key=${encodeURIComponent(kw.keyword)}`;
+            await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await sleep(1000);
 
-            try {
-                const searchRes = await fetch(searchUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    }
-                });
-                if (searchRes.ok) {
-                    html = await searchRes.text();
-                    finalUrl = searchRes.url;
-                }
-            } catch (e) {
-                console.log(`   ⚠️ Fetch search failed, falling back to Puppeteer...`);
+            const finalUrl = page.url();
+            const isSearchPage = finalUrl.includes('/tim-kiem');
+            console.log(`   URL: ${finalUrl} (${isSearchPage ? 'Search' : 'Category'})`);
+
+            let products = await extractProducts();
+            if (products.length === 0) {
+                console.log(`   ⚠️ No products found on page.`);
+            } else {
+                let saved = saveProducts(SOURCE, SOURCE_ID, products);
+                kwProducts += saved;
+                totalNew += saved;
+                console.log(`   Page 1: Found ${products.length} items, +${saved} new`);
             }
 
-            if (!html) {
-                await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                html = await page.content();
-                finalUrl = page.url();
-            }
+            // Click "Xem thêm" repeatedly (max 50 clicks)
+            let loadMoreClicks = 0;
+            const maxClicks = 50;
 
-            const isCategoryPage = !finalUrl.includes('/tim-kiem');
+            while (loadMoreClicks < maxClicks) {
+                if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
 
-            let cateId = '';
-            // Robust CateID Extraction
-            const cateMatch = html.match(/data-cate-id="(\d+)"/) ||
-                html.match(/id="hdCate" value="(\d+)"/) ||
-                html.match(/class="catID" value="(\d+)"/) ||
-                html.match(/document\.isParentCate\s*=\s*'(\d+)'/);
+                const hasMore = await clickLoadMore();
+                if (!hasMore) break;
 
-            if (cateMatch) cateId = cateMatch[1];
-            const productRegex = /<li data-id="(\d+)"[^>]*>([\s\S]*?)<\/li>/g;
-            let match;
-            const initialProducts: CrawledProduct[] = [];
+                loadMoreClicks++;
+                const allProducts = await extractProducts();
+                const newProducts = allProducts.filter(p => !ids.has(String(p.externalId)));
 
-            // Simple HTML parsing (manual because we don't have cheerio)
-            // We just look for standard TGDĐ/DMX product blocks
-
-            // Let's use a simpler strategy: 
-            // If we found a CateID, we can loop API. 
-            // If not, we just parse what we can and move on (search page might only have 1 page if no cateId)
-
-            if (!cateId && isCategoryPage) {
-                // Try harder to find cateId on category page if not found in first pass
-                const cateMatch3 = html.match(/class="catID" value="(\d+)"/);
-                if (cateMatch3) cateId = cateMatch3[1];
-            }
-
-            // Extract initial products from HTML (Robust Regex)
-            const buildProductsFromHtml = (htmlContent: string): CrawledProduct[] => {
-                const items: CrawledProduct[] = [];
-                const cleanHtml = htmlContent.replace(/\n/g, ' ');
-
-                // Match the entire <a> tag that has class "main-contain"
-                const aTagRegex = /<a[^>]*class="[^"]*main-contain[^"]*"[^>]*>/g;
-                let m;
-                while ((m = aTagRegex.exec(cleanHtml)) !== null) {
-                    const fullTag = m[0];
-
-                    const hrefMatch = fullTag.match(/href=['"]([^'"]+)['"]/);
-                    const nameMatch = fullTag.match(/data-name=['"]([^'"]+)['"]/);
-                    const priceMatch = fullTag.match(/data-price=['"]([^'"]+)['"]/);
-                    const brandMatch = fullTag.match(/data-brand=['"]([^'"]+)['"]/);
-                    const cateMatch = fullTag.match(/data-cate=['"]([^'"]+)['"]/);
-
-                    const href = hrefMatch ? hrefMatch[1] : '';
-                    let name = nameMatch ? nameMatch[1] : '';
-                    let price = priceMatch ? Math.round(parseFloat(priceMatch[1])) : 0;
-
-                    if (!name || price === 0) {
-                        const contentStart = aTagRegex.lastIndex;
-                        const nextA = cleanHtml.indexOf('</a>', contentStart);
-                        const content = cleanHtml.substring(contentStart, nextA > 0 ? nextA : contentStart + 1000);
-
-                        if (!name) {
-                            const h3M = content.match(/<h3>(.*?)<\/h3>/);
-                            if (h3M) name = h3M[1].replace(/<[^>]+>/g, '').trim();
-                        }
-                        if (price === 0) {
-                            const priceM = content.match(/<strong class="price">([\d.]+)&?#?x?\d*;?<\/strong>/);
-                            if (priceM) price = parseInt(priceM[1].replace(/[^\d.]/g, '').replace(/\./g, ''));
-                        }
-                    }
-
-                    if (name && price > 0) {
-                        let imageUrl = '';
-                        const imgM = fullTag.match(/src=['"]([^'"]+)['"]/) || fullTag.match(/data-src=['"]([^'"]+)['"]/);
-                        if (!imgM) {
-                            const contentStart = aTagRegex.lastIndex;
-                            const nextA = cleanHtml.indexOf('</a>', contentStart);
-                            const content = cleanHtml.substring(contentStart, nextA > 0 ? nextA : contentStart + 1000);
-                            const innerImgM = content.match(/<img[^>]*src=['"]([^'"]+)['"]/);
-                            if (innerImgM) imageUrl = innerImgM[1];
-                        } else {
-                            imageUrl = imgM[1];
-                        }
-
-                        items.push({
-                            externalId: href,
-                            externalUrl: BASE_URL + href,
-                            name: name,
-                            price: price,
-                            imageUrl: imageUrl,
-                            brand: brandMatch ? brandMatch[1] : '',
-                            category: cateMatch ? cateMatch[1] : '',
-                            available: true
-                        });
-                    }
-                }
-                return items;
-            };
-
-            let products = buildProductsFromHtml(html);
-            kwProducts = saveProducts(SOURCE, SOURCE_ID, products);
-            totalNew += kwProducts;
-            console.log(`   Page 1 (HTML): Found ${products.length} items, +${kwProducts} new`);
-
-            // If we have a CateID, we can loop the API for more
-            if (cateId) {
-                // Determine API params. 
-                // We established it uses POST /Category/FilterProductBox
-                // Body: IsParentCate=False&IsShowCompare=True&prevent=true&c={cateId}&pi={pageIndex}
-
-                let emptyPages = 0;
-                for (let pi = 1; pi <= 20; pi++) { // Loop up to 20 pages
-                    if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
-
-                    const bodyParams = new URLSearchParams();
-                    bodyParams.append('IsParentCate', 'False');
-                    bodyParams.append('IsShowCompare', 'True');
-                    bodyParams.append('prevent', 'true');
-                    bodyParams.append('c', cateId);
-                    bodyParams.append('pi', pi.toString());
-
-                    // Add other params found in typical requests
-                    // o=13 (Featured), or whatever default
-
-                    const res = await fetch(SEARCH_API_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                            'Origin': BASE_URL,
-                            'Referer': finalUrl
-                        },
-                        body: bodyParams
-                    });
-
-                    if (!res.ok) {
-                        break;
-                    }
-
-                    const json = await res.json();
-
-                    // Fix: Ensure listHtml is a string
-                    let listHtml = '';
-                    if (json.listproducts) {
-                        listHtml = typeof json.listproducts === 'string' ? json.listproducts : '';
-                    } else if (typeof json === 'string') {
-                        listHtml = json;
-                    }
-
-                    if (!listHtml || listHtml.trim().length < 100) {
-                        emptyPages++;
-                        if (emptyPages >= 1) break;
-                        continue;
-                    }
-
-                    const apiProducts = buildProductsFromHtml(listHtml);
-                    if (apiProducts.length === 0) {
-                        break;
-                    }
-
-                    const saved = saveProducts(SOURCE, SOURCE_ID, apiProducts);
+                if (newProducts.length > 0) {
+                    const saved = saveProducts(SOURCE, SOURCE_ID, newProducts);
                     kwProducts += saved;
                     totalNew += saved;
-                    console.log(`   Page ${pi + 1} (API): Found ${apiProducts.length} items, +${saved} new | Total: ${ids.size.toLocaleString()}`);
-
-                    await sleep(CONFIG.DELAY_BETWEEN_PAGES); // 50ms now
+                    console.log(`   Page ${loadMoreClicks + 1}: Total ${allProducts.length} items, +${saved} new | Total: ${ids.size.toLocaleString()}`);
                 }
+
+                await sleep(CONFIG.DELAY_BETWEEN_PAGES);
+            }
+
+            if (loadMoreClicks >= maxClicks) {
+                console.log(`   ⚠️ Reached max clicks (${maxClicks})`);
             }
 
         } catch (e: any) {
             console.error(`   ⚠️ Error:`, e.message);
         }
 
+        console.log(`   ✅ Keyword done: +${kwProducts} products\n`);
         if (kw.id !== -1) {
             try { await KeywordService.markCrawled(kw.id); } catch { }
         }
@@ -1191,19 +1195,19 @@ async function runDMX() {
     console.log(`\n🎉 DIENMAYXANH COMPLETE: ${totalNew} new products, ${ids.size} total\n`);
 }
 
+
 // =============================================
 // THEGIOIDIDONG CRAWLER
 // =============================================
 // =============================================
-// THEGIOIDIDONG CRAWLER (API MODE)
+// THEGIOIDIDONG CRAWLER (PUPPETEER + CLICK PAGINATION)
 // =============================================
 async function runTGDD() {
     const SOURCE = 'thegioididong';
     const SOURCE_ID = 6;
     const BASE_URL = 'https://www.thegioididong.com';
-    const SEARCH_API_URL = 'https://www.thegioididong.com/Category/FilterProductBox';
 
-    console.log('\n🚀 THEGIOIDIDONG CRAWLER (API Mode)');
+    console.log('\n🚀 THEGIOIDIDONG CRAWLER (Puppeteer + Click Mode)');
     console.log('═══════════════════════════════════════════════════\n');
 
     const ids = loadExistingIds(SOURCE);
@@ -1220,10 +1224,77 @@ async function runTGDD() {
 
     const browser = await puppeteerExtra.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1366, height: 768 });
+
+    // Helper: Extract products from current page via Puppeteer
+    const extractProducts = async (): Promise<CrawledProduct[]> => {
+        return await page.evaluate((baseUrl) => {
+            const items: any[] = [];
+            document.querySelectorAll('.listproduct li.item, li.item.ajaxed').forEach((el) => {
+                const link = el.querySelector('a');
+                if (!link) return;
+
+                const name = link.getAttribute('data-name') || el.querySelector('h3, .name')?.textContent?.trim() || '';
+                const price = parseInt(link.getAttribute('data-price') || '0') || 0;
+                const id = el.getAttribute('data-id') || link.getAttribute('data-id') || '';
+                const brand = link.getAttribute('data-brand') || '';
+                const category = link.getAttribute('data-cate') || '';
+                let href = link.getAttribute('href') || '';
+                if (href && !href.startsWith('http')) {
+                    href = baseUrl + (href.startsWith('/') ? '' : '/') + href;
+                }
+                const img = el.querySelector('img');
+                const imageUrl = img?.getAttribute('data-src') || img?.getAttribute('src') || '';
+
+                if (name && price > 0 && id) {
+                    items.push({
+                        externalId: id,
+                        externalUrl: href,
+                        name,
+                        price,
+                        imageUrl,
+                        brand,
+                        category,
+                        available: true
+                    });
+                }
+            });
+            return items;
+        }, BASE_URL) as CrawledProduct[];
+    };
+
+    // Helper: Click "Xem thêm" button and wait for new content
+    const clickLoadMore = async (): Promise<boolean> => {
+        try {
+            const btn = await page.$('.view-more a, .viewmore a');
+            if (!btn) return false;
+
+            // Check if button is visible
+            const isVisible = await page.evaluate((el) => {
+                const rect = el.getBoundingClientRect();
+                return rect.height > 0 && rect.width > 0;
+            }, btn);
+            if (!isVisible) return false;
+
+            // Get current product count
+            const countBefore = await page.$$eval('.listproduct li.item, li.item.ajaxed', els => els.length);
+
+            // Click the button
+            await btn.click();
+            await sleep(1500); // Wait for AJAX to load
+
+            // Check if products actually increased
+            const countAfter = await page.$$eval('.listproduct li.item, li.item.ajaxed', els => els.length);
+            return countAfter > countBefore;
+
+        } catch (e) {
+            return false;
+        }
+    };
 
     for (let i = 0; i < keywords.length; i++) {
         const kw = keywords[i];
@@ -1234,164 +1305,59 @@ async function runTGDD() {
         let kwProducts = 0;
 
         try {
-            // Step 1: Get Initial Page for params via Fetch (Faster)
-            const searchUrl = `${BASE_URL}/tim-kiem?key=${encodeURIComponent(kw.keyword.replace(/ /g, '+'))}`;
-            let html = '';
-            let finalUrl = searchUrl;
+            // Navigate to search URL
+            const searchUrl = `${BASE_URL}/tim-kiem?key=${encodeURIComponent(kw.keyword)}`;
+            await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await sleep(1000);
 
-            try {
-                const searchRes = await fetch(searchUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    }
-                });
-                if (searchRes.ok) {
-                    html = await searchRes.text();
-                    finalUrl = searchRes.url;
-                }
-            } catch (e) {
-                console.log(`   ⚠️ Fetch search failed, falling back to Puppeteer...`);
+            // Check final URL (might redirect to category page)
+            const finalUrl = page.url();
+            const isSearchPage = finalUrl.includes('/tim-kiem');
+            console.log(`   URL: ${finalUrl} (${isSearchPage ? 'Search' : 'Category'})`);
+
+            // Get initial products
+            let products = await extractProducts();
+            if (products.length === 0) {
+                console.log(`   ⚠️ No products found on page.`);
+            } else {
+                let saved = saveProducts(SOURCE, SOURCE_ID, products);
+                kwProducts += saved;
+                totalNew += saved;
+                console.log(`   Page 1: Found ${products.length} items, +${saved} new`);
             }
 
-            if (!html) {
-                await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                html = await page.content();
-                finalUrl = page.url();
-            }
+            // Click "Xem thêm" repeatedly to load all products (max 50 clicks)
+            let loadMoreClicks = 0;
+            const maxClicks = 50;
 
-            const isCategoryPage = !finalUrl.includes('/tim-kiem');
+            while (loadMoreClicks < maxClicks) {
+                if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
 
-            let cateId = '';
-            // Robust CateID Extraction
-            const cateMatch = html.match(/data-cate-id="(\d+)"/) ||
-                html.match(/id="hdCate" value="(\d+)"/) ||
-                html.match(/class="catID" value="(\d+)"/) ||
-                html.match(/document\.isParentCate\s*=\s*'(\d+)'/);
+                const hasMore = await clickLoadMore();
+                if (!hasMore) break;
 
-            if (cateMatch) cateId = cateMatch[1];
+                loadMoreClicks++;
 
-            // Extract initial products from HTML (Robust Regex)
-            const buildProductsFromHtml = (htmlContent: string): CrawledProduct[] => {
-                const items: CrawledProduct[] = [];
-                const cleanHtml = htmlContent.replace(/\n/g, ' ');
-                // Use a more relaxed regex that doesn't strictly depend on "main-contain"
-                // but matches items that look like TGDD/DMX product links
-                const aTagRegex = /<a[^>]*class="[^"]*(?:main-contain|item|product)[^"]*"[^>]*>/g;
-                let m;
-                while ((m = aTagRegex.exec(cleanHtml)) !== null) {
-                    const fullTag = m[0];
+                // Extract all products again (they accumulate on page)
+                const allProducts = await extractProducts();
 
-                    const hrefMatch = fullTag.match(/href=['"]([^'"]+)['"]/);
-                    const nameMatch = fullTag.match(/data-name=['"]([^'"]+)['"]/);
-                    const priceMatch = fullTag.match(/data-price=['"]([^'"]+)['"]/);
-                    const brandMatch = fullTag.match(/data-brand=['"]([^'"]+)['"]/);
-                    const cateMatch = fullTag.match(/data-cate=['"]([^'"]+)['"]/);
+                // Filter out products we already have
+                const newProducts = allProducts.filter(p => !ids.has(String(p.externalId)));
 
-                    const href = hrefMatch ? hrefMatch[1] : '';
-                    let name = nameMatch ? nameMatch[1] : '';
-                    let price = priceMatch ? Math.round(parseFloat(priceMatch[1])) : 0;
-
-                    if (!name || price === 0) {
-                        const contentStart = aTagRegex.lastIndex;
-                        const nextA = cleanHtml.indexOf('</a>', contentStart);
-                        const content = cleanHtml.substring(contentStart, nextA > 0 ? nextA : contentStart + 1000);
-
-                        if (!name) {
-                            const h3M = content.match(/<h3>(.*?)<\/h3>/) || content.match(/<h3[^>]*>(.*?)<\/h3>/);
-                            if (h3M) name = h3M[1].replace(/<[^>]+>/g, '').trim();
-                        }
-                        if (price === 0) {
-                            const priceM = content.match(/<strong class="price">([\d.]+)&?#?x?\d*;?<\/strong>/) || content.match(/<span class="price">([\d.]+)&?#?x?\d*;?<\/span>/);
-                            if (priceM) price = parseInt(priceM[1].replace(/[^\d.]/g, '').replace(/\./g, ''));
-                        }
-                    }
-
-                    if (name && price > 0) {
-                        let imageUrl = '';
-                        const imgM = fullTag.match(/src=['"]([^'"]+)['"]/) || fullTag.match(/data-src=['"]([^'"]+)['"]/);
-                        if (!imgM) {
-                            const contentStart = aTagRegex.lastIndex;
-                            const nextA = cleanHtml.indexOf('</a>', contentStart);
-                            const content = cleanHtml.substring(contentStart, nextA > 0 ? nextA : contentStart + 1000);
-                            const innerImgM = content.match(/<img[^>]*src=['"]([^'"]+)['"]/) || content.match(/<img[^>]*data-src=['"]([^'"]+)['"]/);
-                            if (innerImgM) imageUrl = innerImgM[1];
-                        } else {
-                            imageUrl = imgM[1];
-                        }
-
-                        items.push({
-                            externalId: href,
-                            externalUrl: href.startsWith('http') ? href : BASE_URL + href,
-                            name: name,
-                            price: price,
-                            imageUrl: imageUrl,
-                            brand: brandMatch ? brandMatch[1] : '',
-                            category: cateMatch ? cateMatch[1] : '',
-                            available: true
-                        });
-                    }
-                }
-                return items;
-            };
-
-            let products = buildProductsFromHtml(html);
-            kwProducts = saveProducts(SOURCE, SOURCE_ID, products);
-            totalNew += kwProducts;
-            console.log(`   Page 1 (Puppeteer): Found ${products.length} items, +${kwProducts} new`);
-
-            // Loop API if CateID found
-            if (cateId) {
-                let emptyPages = 0;
-                for (let pi = 1; pi <= 20; pi++) {
-                    if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
-
-                    const bodyParams = new URLSearchParams();
-                    bodyParams.append('IsParentCate', 'False');
-                    bodyParams.append('IsShowCompare', 'True');
-                    bodyParams.append('prevent', 'true');
-                    bodyParams.append('c', cateId);
-                    bodyParams.append('pi', pi.toString());
-
-                    const res = await fetch(SEARCH_API_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                            'Origin': BASE_URL,
-                            'Referer': finalUrl
-                        },
-                        body: bodyParams
-                    });
-
-                    if (!res.ok) break;
-
-                    const json = await res.json();
-
-                    // Fix: Ensure listHtml is a string
-                    let listHtml = '';
-                    if (json && json.listproducts) {
-                        listHtml = typeof json.listproducts === 'string' ? json.listproducts : '';
-                    } else if (typeof json === 'string') {
-                        listHtml = json;
-                    }
-
-                    if (!listHtml || listHtml.trim().length < 100) {
-                        emptyPages++;
-                        if (emptyPages >= 1) break;
-                        continue;
-                    }
-
-                    const apiProducts = buildProductsFromHtml(typeof listHtml === 'string' ? listHtml : '');
-                    if (apiProducts.length === 0) break;
-
-                    const saved = saveProducts(SOURCE, SOURCE_ID, apiProducts);
+                if (newProducts.length > 0) {
+                    const saved = saveProducts(SOURCE, SOURCE_ID, newProducts);
                     kwProducts += saved;
                     totalNew += saved;
-                    console.log(`   Page ${pi + 1} (API): Found ${apiProducts.length} items, +${saved} new | Total: ${ids.size.toLocaleString()}`);
-
-                    await sleep(CONFIG.DELAY_BETWEEN_PAGES);
+                    console.log(`   Page ${loadMoreClicks + 1}: Total ${allProducts.length} items, +${saved} new | Total: ${ids.size.toLocaleString()}`);
                 }
+
+                await sleep(CONFIG.DELAY_BETWEEN_PAGES);
             }
+
+            if (loadMoreClicks >= maxClicks) {
+                console.log(`   ⚠️ Reached max clicks (${maxClicks})`);
+            }
+
         } catch (e: any) {
             console.error(`   ⚠️ Error:`, e.message);
         }
@@ -1406,6 +1372,7 @@ async function runTGDD() {
     await browser.close();
     console.log(`\n🎉 THEGIOIDIDONG COMPLETE: ${totalNew} new products, ${ids.size} total\n`);
 }
+
 
 // =============================================
 // MAIN
