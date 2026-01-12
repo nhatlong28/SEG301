@@ -20,7 +20,10 @@ import logger from '../utils/logger';
 
 import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+<<<<<<< HEAD
 import * as cheerio from 'cheerio';
+=======
+>>>>>>> 65c4278 (feat: initialize web application structure and core layouts)
 
 puppeteerExtra.use(StealthPlugin());
 
@@ -1195,7 +1198,6 @@ async function runDMX() {
     console.log(`\n🎉 DIENMAYXANH COMPLETE: ${totalNew} new products, ${ids.size} total\n`);
 }
 
-
 // =============================================
 // THEGIOIDIDONG CRAWLER
 // =============================================
@@ -1372,7 +1374,6 @@ async function runTGDD() {
     await browser.close();
     console.log(`\n🎉 THEGIOIDIDONG COMPLETE: ${totalNew} new products, ${ids.size} total\n`);
 }
-
 
 // =============================================
 // MAIN
