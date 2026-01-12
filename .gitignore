@@ -13,3 +13,11 @@ brain/
 *.png
 *.jpg
 .nha
+
+# python
+__pycache__/
+output_blocks/
+data/sample.json
+final_index.bin
+lexicon.dat
+test_console.py
