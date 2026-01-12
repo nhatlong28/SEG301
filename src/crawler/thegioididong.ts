@@ -149,19 +149,35 @@ export class ThegioididongCrawler extends PuppeteerCrawlerBase {
 
         $('.item, .product-item, .listproduct li').each((_, el) => {
             const $el = $(el);
-            const name = $el.find('h3, .name').text().trim();
-            const price = parseInt($el.find('.price, strong').text().replace(/[^\d]/g, ''));
-            const id = $el.attr('data-id') || $el.find('a').attr('href');
+            const $link = $el.find('a').first();
 
-            if (name && price) {
-                products.push({
-                    externalId: id || name, // Fallback
-                    name,
-                    price,
-                    available: true,
-                    externalUrl: this.baseUrl + ($el.find('a').attr('href') || ''),
-                } as any);
-            }
+            // Try to get data from attributes first (very reliable in TGDD API)
+            const attrName = $link.attr('data-name');
+            const attrPrice = parseInt($link.attr('data-price') || '0');
+            const attrBrand = $link.attr('data-brand');
+            const attrCate = $link.attr('data-cate');
+            const attrId = $link.attr('data-id') || $el.attr('data-id');
+
+            const name = attrName || $el.find('h3, .name').text().trim();
+            const price = attrPrice || parseInt($el.find('.price, strong').text().replace(/[^\d]/g, '')) || 0;
+            const id = attrId || $link.attr('href');
+
+            // Skip if no name or price is 0
+            if (!name || price <= 0) return;
+
+            const imageUrl = $el.find('img').attr('src') || $el.find('img').attr('data-src') || '';
+            const externalUrl = $link.attr('href') || '';
+
+            products.push({
+                externalId: id || name,
+                name,
+                price,
+                available: true,
+                externalUrl: externalUrl.startsWith('http') ? externalUrl : this.baseUrl + externalUrl,
+                imageUrl: imageUrl,
+                brand: attrBrand || '',
+                category: attrCate || '',
+            } as any);
         });
 
         return products;

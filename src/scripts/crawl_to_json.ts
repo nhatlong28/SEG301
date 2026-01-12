@@ -72,6 +72,9 @@ function saveProducts(source: string, sourceId: number, products: CrawledProduct
         const id = String(product.externalId);
         if (!id || ids.has(id)) continue;
 
+        // Final Quality Check: Price MUST be > 0
+        if (!product.price || product.price <= 0) continue;
+
         ids.add(id);
         newCount++;
 
@@ -535,83 +538,148 @@ async function runLazada() {
 
     let page = await browser.newPage();
 
+    // Helper to load User-Agent
+    const loadUserAgent = () => {
+        const uaPath = path.join(process.cwd(), 'lazada_ua.txt');
+        if (fs.existsSync(uaPath)) {
+            const ua = fs.readFileSync(uaPath, 'utf8').trim();
+            if (ua) return ua;
+        }
+        return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    };
+
     // Helper to load cookies (JSON & Netscape support)
     const loadCookies = async (p: Page) => {
         const cookiePath = path.join(process.cwd(), 'lazada_cookie.txt');
         if (fs.existsSync(cookiePath)) {
             try {
-                const cookieStr = fs.readFileSync(cookiePath, 'utf8');
-                if (!cookieStr.trim()) return;
+                const cookieStr = fs.readFileSync(cookiePath, 'utf8').trim();
+                if (!cookieStr) return false;
 
-                if (cookieStr.trim().startsWith('[')) {
+                if (cookieStr.startsWith('[')) {
                     // JSON format
                     const cookies = JSON.parse(cookieStr);
                     await p.setCookie(...cookies);
                     console.log(`   🍪 Loaded ${cookies.length} cookies (JSON)`);
+                    return true;
                 } else {
-                    // Netscape format
-                    const cookies: any[] = [];
-                    const lines = cookieStr.split('\n');
-                    for (const line of lines) {
-                        const l = line.trim();
-                        if (!l || l.startsWith('#')) continue;
-                        const parts = l.split('\t');
-                        if (parts.length >= 7) {
-                            cookies.push({
-                                domain: parts[0],
-                                path: parts[2],
-                                secure: parts[3].toUpperCase() === 'TRUE',
-                                expires: parseInt(parts[4]),
-                                name: parts[5],
-                                value: parts[6]
-                            });
-                        }
-                    }
-                    if (cookies.length > 0) {
+                    // Cookie string format (name=value; name2=value2) or Netscape
+                    if (cookieStr.includes('=') && !cookieStr.includes('\t')) {
+                        // Simple cookie string format
+                        const cookies = cookieStr.split(';').map(pair => {
+                            const [name, ...valueParts] = pair.trim().split('=');
+                            return {
+                                name: name,
+                                value: valueParts.join('='),
+                                domain: '.lazada.vn',
+                                path: '/'
+                            };
+                        }).filter(c => c.name && c.value);
                         await p.setCookie(...cookies);
-                        console.log(`   🍪 Loaded ${cookies.length} cookies (Netscape)`);
+                        console.log(`   🍪 Loaded ${cookies.length} cookies (String)`);
+                        return true;
+                    } else {
+                        // Netscape format
+                        const cookies: any[] = [];
+                        const lines = cookieStr.split('\n');
+                        for (const line of lines) {
+                            const l = line.trim();
+                            if (!l || l.startsWith('#')) continue;
+                            const parts = l.split('\t');
+                            if (parts.length >= 7) {
+                                cookies.push({
+                                    domain: parts[0],
+                                    path: parts[2],
+                                    secure: parts[3].toUpperCase() === 'TRUE',
+                                    expires: parseInt(parts[4]),
+                                    name: parts[5],
+                                    value: parts[6]
+                                });
+                            }
+                        }
+                        if (cookies.length > 0) {
+                            await p.setCookie(...cookies);
+                            console.log(`   🍪 Loaded ${cookies.length} cookies (Netscape)`);
+                            return true;
+                        }
                     }
                 }
             } catch (e) { console.error('   ⚠️ Cookie load error:', e); }
         }
+        return false;
     };
 
     // Helper to handle Captcha/Login
     const handleCaptcha = async () => {
-        console.log('   ⛔ Captcha/Punish detected! Switching to MANUAL LOGIN mode...');
+        console.log('\n   ⛔ CAPTCHA/BOT DETECTION DETECTED!');
+        console.log('   ═══════════════════════════════════════════════════');
+        console.log('   👉 CÁCH 1: Cập nhật thủ công (KHUYÊN DÙNG)');
+        console.log('      1. Mở trình duyệt của bạn, vào Lazada.vn và giải captcha/đăng nhập.');
+        console.log('      2. Copy Cookie và dán vào file: lazada_cookie.txt');
+        console.log('      3. Copy User-Agent và dán vào file: lazada_ua.txt');
+        console.log('      (Tool sẽ tự động nhận diện khi file thay đổi)');
+        console.log('\n   👉 CÁCH 2: Dùng trình duyệt tự động (Popup)');
+        console.log('      Giải quyết trực tiếp trên cửa sổ trình duyệt sắp mờ ra.');
+        console.log('   ═══════════════════════════════════════════════════\n');
+
         try { await browser.close(); } catch { }
 
         // Relaunch Headful
-        console.log('   🚀 Opening browser window... Please Login or Solve Captcha!');
+        console.log('   🚀 Opening browser window for manual intervention...');
         browser = await puppeteerExtra.launch({
             headless: false,
             defaultViewport: null,
             args: ['--window-size=1280,800', '--no-sandbox']
         });
         page = await browser.newPage();
+        await page.setUserAgent(loadUserAgent());
 
         try {
-            await page.goto('https://member.lazada.vn/user/login', { waitUntil: 'domcontentloaded' });
+            await page.goto('https://www.lazada.vn', { waitUntil: 'domcontentloaded' });
         } catch { }
 
-        // Wait for user to fix it
-        console.log('   ⏳ Waiting for valid session... (Login or Solve Captcha in the popup window)');
+        const cookiePath = path.join(process.cwd(), 'lazada_cookie.txt');
+        const uaPath = path.join(process.cwd(), 'lazada_ua.txt');
+        let initialCookieStat = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
+        let initialUAStat = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
+
+        // Wait for user or detect file changes
+        console.log('   ⏳ Waiting for valid session (File update or Popup login)...');
+
         await new Promise<void>((resolve) => {
             const checkInterval = setInterval(async () => {
                 try {
-                    if (!browser.isConnected()) { clearInterval(checkInterval); resolve(); return; }
+                    if (!browser.isConnected()) {
+                        clearInterval(checkInterval);
+                        resolve();
+                        return;
+                    }
 
+                    // Check for file changes (MANUAL UPDATE)
+                    const currentCookieStat = fs.existsSync(cookiePath) ? fs.statSync(cookiePath).mtimeMs : 0;
+                    const currentUAStat = fs.existsSync(uaPath) ? fs.statSync(uaPath).mtimeMs : 0;
+
+                    if (currentCookieStat !== initialCookieStat || currentUAStat !== initialUAStat) {
+                        console.log(`   ✨ File change detected! Applying new settings...`);
+                        clearInterval(checkInterval);
+                        resolve();
+                        return;
+                    }
+
+                    // Check for browser login (POPUP UPDATE)
                     const cookies = await page.cookies();
-                    const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
                     const url = page.url();
-
-                    if (cookies.length > 5 && !url.includes('login') && !url.includes('Security') && !url.includes('punish') && !url.includes('tmd')) {
-                        fs.writeFileSync(path.join(process.cwd(), 'lazada_cookie.txt'), cookieString);
-                        console.log(`   ✅ Login detected! Saved cookies.`);
+                    if (cookies.length > 10 && !url.includes('login') && !url.includes('Security') && !url.includes('punish')) {
+                        const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+                        fs.writeFileSync(cookiePath, cookieString);
+                        console.log(`   ✅ Login detected in popup! Saved cookies.`);
                         clearInterval(checkInterval);
                         resolve();
                     }
-                } catch (e) { clearInterval(checkInterval); resolve(); }
+                } catch (e) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
             }, 2000);
         });
 
@@ -632,14 +700,15 @@ async function runLazada() {
             defaultViewport: null
         });
         page = await browser.newPage();
-        await loadCookies(page);
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        await page.setUserAgent(loadUserAgent());
         await page.setViewport({ width: 1920, height: 1080 });
+        await loadCookies(page);
     };
 
-    await loadCookies(page);
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setUserAgent(loadUserAgent());
     await page.setViewport({ width: 1920, height: 1080 });
+    await loadCookies(page);
+
 
     // Initial Navigation & Captcha Check
     console.log('   🔄 Connecting to Lazada...');
@@ -678,11 +747,10 @@ async function runLazada() {
         for (let pageNum = 1; pageNum <= 100; pageNum++) {
             if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
 
-            const url = `https://www.lazada.vn${category}/?page=${pageNum}`;
+            const url = `https://www.lazada.vn${category}/?page=${pageNum}&ajax=true`;
 
             try {
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                await sleep(1000); // Wait for JS
 
                 // Check blocked
                 const title = await page.title();
@@ -693,110 +761,64 @@ async function runLazada() {
                     continue;
                 }
 
-                // Wait for products
-                let selector = 'div[data-qa-locator="product-item"]';
-                try {
-                    await page.waitForSelector(selector, { timeout: 8000 });
-                } catch {
-                    selector = '.Bm3ON';
+                // Extract JSON Data
+                const ajaxData = await page.evaluate(() => {
                     try {
-                        await page.waitForSelector(selector, { timeout: 5000 });
-                    } catch {
-                        console.log(`   ⚠️ No products found on page ${pageNum}`);
-
-                        // DEBUG LOGGING
-                        const debugInfo = await page.evaluate(() => ({
-                            url: window.location.href,
-                            title: document.title,
-                            hasQA: document.querySelectorAll('div[data-qa-locator="product-item"]').length,
-                            hasBm3ON: document.querySelectorAll('.Bm3ON').length,
-                            bodyLen: document.body.innerHTML.length,
-                            snippet: document.body.innerText.substring(0, 200).replace(/\n/g, ' ')
-                        }));
-                        console.log('   🔴 DEBUG:', JSON.stringify(debugInfo));
-
-                        emptyPages++;
-                        if (emptyPages >= 2) break;
-                        continue;
+                        return JSON.parse(document.body.innerText);
+                    } catch (e) {
+                        return null;
                     }
+                });
+
+                if (!ajaxData || !ajaxData.mods || !ajaxData.mods.listItems) {
+                    console.log(`   ⚠️ No valid JSON data on page ${pageNum}`);
+                    emptyPages++;
+                    if (emptyPages >= 2) break;
+                    continue;
                 }
 
-                // Scroll (Optimized)
-                await page.evaluate(async () => {
-                    await new Promise<void>((resolve) => {
-                        let totalHeight = 0;
-                        const distance = 1000;
-                        const timer = setInterval(() => {
-                            const scrollHeight = document.body.scrollHeight;
-                            window.scrollBy(0, distance);
-                            totalHeight += distance;
-                            if (totalHeight >= scrollHeight) {
-                                clearInterval(timer);
-                                resolve();
-                            }
-                        }, 20);
-                    });
-                });
-                await sleep(1000);
-
-                // Extract
-                const products = await page.evaluate(() => {
-                    const items: any[] = [];
-                    const elements = document.querySelectorAll('div[data-qa-locator="product-item"], .Bm3ON');
-                    elements.forEach((el: any) => {
-                        try {
-                            const nameLink = el.querySelector('.RfADt a') || el.querySelector('a[title]');
-                            if (!nameLink) return;
-
-                            const name = nameLink.getAttribute('title') || nameLink.textContent?.trim() || '';
-                            const href = nameLink.getAttribute('href') || '';
-
-                            const imgEl = el.querySelector('img');
-                            const imageUrl = imgEl?.src || imgEl?.getAttribute('src') || '';
-
-                            const priceEl = el.querySelector('.ooOxS') || el.querySelector('.aBrP_');
-                            const price = parseInt((priceEl?.textContent || '0').replace(/[^\d]/g, '')) || 0;
-
-                            const soldEl = el.querySelector('._1cEkb');
-                            const soldCount = parseInt((soldEl?.textContent || '0').replace(/[^\d]/g, '')) || 0;
-
-                            const idMatch = href.match(/-i(\d+)-s/) || href.match(/i(\d+)/);
-                            const externalId = idMatch ? idMatch[1] : href;
-
-                            if (name && price > 0) {
-                                items.push({
-                                    externalId,
-                                    externalUrl: href.startsWith('//') ? 'https:' + href : (href.startsWith('http') ? href : 'https://www.lazada.vn' + href),
-                                    name,
-                                    price,
-                                    imageUrl: imageUrl.startsWith('//') ? 'https:' + imageUrl : imageUrl,
-                                    soldCount,
-                                    rating: 0,
-                                    reviewCount: 0
-                                });
-                            }
-                        } catch (e) { }
-                    });
-                    return items;
-                });
-
-                if (products.length === 0) {
+                const listItems = ajaxData.mods.listItems;
+                if (listItems.length === 0) {
                     emptyPages++;
                     if (emptyPages >= 2) break;
                     continue;
                 }
                 emptyPages = 0;
 
-                const crawledProducts: CrawledProduct[] = products.map((p: any) => ({
-                    ...p, available: true, brand: '', category: category
-                }));
+                // Extract Category Name from filters if available
+                let categoryName = category.replace(/^\/|\/$/g, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                const catFilter = ajaxData.mods.filter?.filterItems?.find((f: any) => f.name === 'category');
+                if (catFilter && catFilter.options && catFilter.options.length > 0) {
+                    categoryName = catFilter.options[0].title;
+                }
+
+                const crawledProducts: CrawledProduct[] = listItems.map((item: any) => {
+                    const href = item.itemUrl || '';
+                    const idMatch = href.match(/-i(\d+)-s/) || href.match(/i(\d+)/);
+                    const externalId = item.itemId || (idMatch ? idMatch[1] : href);
+
+                    return {
+                        externalId: String(externalId),
+                        externalUrl: href.startsWith('//') ? 'https:' + href : (href.startsWith('http') ? href : 'https://www.lazada.vn' + href),
+                        name: item.name,
+                        price: parseInt(item.price) || 0,
+                        originalPrice: item.originalPrice ? parseInt(item.originalPrice) : undefined,
+                        imageUrl: item.image?.startsWith('//') ? 'https:' + item.image : item.image,
+                        soldCount: parseInt(String(item.itemSoldCntShow || '0').replace(/[^\d]/g, '')) || 0,
+                        rating: parseFloat(item.ratingScore) || 0,
+                        reviewCount: parseInt(item.review) || 0,
+                        available: true,
+                        brand: item.brandName || '',
+                        category: categoryName
+                    };
+                }).filter((p: any) => p.name && p.price > 0);
 
                 const newCount = saveProducts(SOURCE, SOURCE_ID, crawledProducts);
                 catProducts += newCount;
                 totalNew += newCount;
 
                 const progress = ((ids.size / CONFIG.TARGET_PRODUCTS) * 100).toFixed(1);
-                console.log(`   Page ${pageNum}: Found ${products.length} items, +${newCount} new | Total: ${ids.size.toLocaleString()} (${progress}%)`);
+                console.log(`   Page ${pageNum}: Found ${listItems.length} items, +${newCount} new | Total: ${ids.size.toLocaleString()} (${progress}%)`);
 
                 // SMART SKIP: If first 2 pages have no new products, assume category is done
                 if (newCount === 0 && pageNum <= 2) {
@@ -832,13 +854,10 @@ async function runLazada() {
         for (let pageNum = 1; pageNum <= 50; pageNum++) { // Increased to 50 pages per keyword
             if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
 
-            const searchUrl = `https://www.lazada.vn/catalog/?q=${encodeURIComponent(kw.keyword)}&page=${pageNum}`;
+            const searchUrl = `https://www.lazada.vn/catalog/?q=${encodeURIComponent(kw.keyword)}&page=${pageNum}&ajax=true`;
 
             try {
                 await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-                // Wait shorter for JS to render
-                await sleep(1000);
 
                 // Check if blocked
                 const title = await page.title();
@@ -849,121 +868,67 @@ async function runLazada() {
                     continue;
                 }
 
-                // Wait for products - try multiple selectors
-                let selector = 'div[data-qa-locator="product-item"]';
-                try {
-                    await page.waitForSelector(selector, { timeout: 8000 });
-                } catch {
-                    selector = '.Bm3ON';
+                // Extract JSON Data
+                const ajaxData = await page.evaluate(() => {
                     try {
-                        await page.waitForSelector(selector, { timeout: 5000 });
-                    } catch {
-                        console.log(`   ⚠️ No products found on page ${pageNum}`);
-
-                        // DEBUG LOGGING
-                        const debugInfo = await page.evaluate(() => ({
-                            url: window.location.href,
-                            title: document.title,
-                            hasQA: document.querySelectorAll('div[data-qa-locator="product-item"]').length,
-                            hasBm3ON: document.querySelectorAll('.Bm3ON').length,
-                            bodyLen: document.body.innerHTML.length,
-                            snippet: document.body.innerText.substring(0, 200).replace(/\n/g, ' ')
-                        }));
-                        console.log('   🔴 DEBUG:', JSON.stringify(debugInfo));
-
-                        emptyPages++;
-                        if (emptyPages >= 2) break;
-                        continue;
+                        return JSON.parse(document.body.innerText);
+                    } catch (e) {
+                        return null;
                     }
-                }
-
-                // Scroll (Optimized)
-                await page.evaluate(async () => {
-                    await new Promise<void>((resolve) => {
-                        let totalHeight = 0;
-                        const distance = 1000;
-                        const timer = setInterval(() => {
-                            const scrollHeight = document.body.scrollHeight;
-                            window.scrollBy(0, distance);
-                            totalHeight += distance;
-                            if (totalHeight >= scrollHeight) {
-                                clearInterval(timer);
-                                resolve();
-                            }
-                        }, 20);
-                    });
-                });
-                await sleep(1000);
-
-                // Extract Data with updated selectors
-                const products = await page.evaluate(() => {
-                    const items: any[] = [];
-                    // Try both selectors
-                    const elements = document.querySelectorAll('div[data-qa-locator="product-item"], .Bm3ON');
-                    elements.forEach((el: any) => {
-                        try {
-                            const nameLink = el.querySelector('.RfADt a') || el.querySelector('a[title]');
-                            if (!nameLink) return;
-
-                            const name = nameLink.getAttribute('title') || nameLink.textContent?.trim() || '';
-                            const href = nameLink.getAttribute('href') || '';
-
-                            const imgEl = el.querySelector('img');
-                            const imageUrl = imgEl?.src || imgEl?.getAttribute('src') || '';
-
-                            // Updated price selector
-                            const priceEl = el.querySelector('.ooOxS') || el.querySelector('.aBrP_');
-                            const price = parseInt((priceEl?.textContent || '0').replace(/[^\d]/g, '')) || 0;
-
-                            // Updated sold selector
-                            const soldEl = el.querySelector('._1cEkb');
-                            const soldCount = parseInt((soldEl?.textContent || '0').replace(/[^\d]/g, '')) || 0;
-
-                            const idMatch = href.match(/-i(\d+)-s/) || href.match(/i(\d+)/);
-                            const externalId = idMatch ? idMatch[1] : href;
-
-                            if (name && price > 0) {
-                                items.push({
-                                    externalId,
-                                    externalUrl: href.startsWith('//') ? 'https:' + href : (href.startsWith('http') ? href : 'https://www.lazada.vn' + href),
-                                    name,
-                                    price,
-                                    imageUrl: imageUrl.startsWith('//') ? 'https:' + imageUrl : imageUrl,
-                                    soldCount,
-                                    rating: 0,
-                                    reviewCount: 0
-                                });
-                            }
-                        } catch (e) { }
-                    });
-                    return items;
                 });
 
-                if (products.length === 0) {
+                if (!ajaxData || !ajaxData.mods || !ajaxData.mods.listItems) {
+                    console.log(`   ⚠️ No valid JSON data on page ${pageNum}`);
                     emptyPages++;
                     if (emptyPages >= 2) break;
                     continue;
                 }
 
+                const listItems = ajaxData.mods.listItems;
+                if (listItems.length === 0) {
+                    emptyPages++;
+                    if (emptyPages >= 2) break;
+                    continue;
+                }
                 emptyPages = 0;
-                const crawledProducts: CrawledProduct[] = products.map((p: any) => ({
-                    ...p,
-                    available: true,
-                    brand: '',
-                    category: ''
-                }));
+
+                // Extract Category Name from filters if available
+                let categoryName = '';
+                const catFilter = ajaxData.mods.filter?.filterItems?.find((f: any) => f.name === 'category');
+                if (catFilter && catFilter.options && catFilter.options.length > 0) {
+                    categoryName = catFilter.options[0].title;
+                }
+
+                const crawledProducts: CrawledProduct[] = listItems.map((item: any) => {
+                    const href = item.itemUrl || '';
+                    const idMatch = href.match(/-i(\d+)-s/) || href.match(/i(\d+)/);
+                    const externalId = item.itemId || (idMatch ? idMatch[1] : href);
+
+                    return {
+                        externalId: String(externalId),
+                        externalUrl: href.startsWith('//') ? 'https:' + href : (href.startsWith('http') ? href : 'https://www.lazada.vn' + href),
+                        name: item.name,
+                        price: parseInt(item.price) || 0,
+                        originalPrice: item.originalPrice ? parseInt(item.originalPrice) : undefined,
+                        imageUrl: item.image?.startsWith('//') ? 'https:' + item.image : item.image,
+                        soldCount: parseInt(String(item.itemSoldCntShow || '0').replace(/[^\d]/g, '')) || 0,
+                        rating: parseFloat(item.ratingScore) || 0,
+                        reviewCount: parseInt(item.review) || 0,
+                        available: true,
+                        brand: item.brandName || '',
+                        category: categoryName
+                    };
+                }).filter((p: any) => p.name && p.price > 0);
 
                 const newCount = saveProducts(SOURCE, SOURCE_ID, crawledProducts);
                 kwProducts += newCount;
                 totalNew += newCount;
 
                 const progress = ((ids.size / CONFIG.TARGET_PRODUCTS) * 100).toFixed(1);
-                console.log(`   Page ${pageNum}: Found ${products.length} items, +${newCount} new | Total: ${ids.size.toLocaleString()} (${progress}%)`);
-
-
+                console.log(`   Page ${pageNum}: Found ${listItems.length} items, +${newCount} new | Total: ${ids.size.toLocaleString()} (${progress}%)`);
 
                 // Human delay
-                await sleep(1000);
+                await sleep(500);
 
             } catch (e: any) {
                 console.log(`   ⚠️ Error navigating/scraping page ${pageNum}:`, e.message);
@@ -1010,6 +975,13 @@ async function runDMX() {
 
     let totalNew = 0;
 
+    const browser = await puppeteerExtra.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
     for (let i = 0; i < keywords.length; i++) {
         const kw = keywords[i];
         if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
@@ -1019,40 +991,41 @@ async function runDMX() {
         let kwProducts = 0;
 
         try {
-            // Step 1: Get Initial Page to find Category ID (c) and Manufacturer ID (m) or other params
+            // Step 1: Get Initial Page for params via Fetch (Faster)
             const searchUrl = `${BASE_URL}/tim-kiem?key=${encodeURIComponent(kw.keyword.replace(/ /g, '+'))}`;
-            const initRes = await fetch(searchUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
-            });
+            let html = '';
+            let finalUrl = searchUrl;
 
-            if (!initRes.ok) {
-                console.log(`   ⚠️ Failed to load search page: ${initRes.status}`);
-                continue;
+            try {
+                const searchRes = await fetch(searchUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    }
+                });
+                if (searchRes.ok) {
+                    html = await searchRes.text();
+                    finalUrl = searchRes.url;
+                }
+            } catch (e) {
+                console.log(`   ⚠️ Fetch search failed, falling back to Puppeteer...`);
             }
 
-            const html = await initRes.text();
+            if (!html) {
+                await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                html = await page.content();
+                finalUrl = page.url();
+            }
 
-            // Extract Category ID and other params
-            // Usually found in some hidden inputs or data attributes or script
-            // Simplest way for search results: Look for "LoadMoreProduct" or similar logic in the HTML
-            // TGDĐ/DMX Search often redirects to a Category page if the keyword matches a category (e.g. "máy giặt")
-            // Or it stays on /tim-kiem. 
-
-            // Check if redirected to a category
-            const finalUrl = initRes.url;
             const isCategoryPage = !finalUrl.includes('/tim-kiem');
 
             let cateId = '';
-            // Regex to find cateId in common places
-            const cateMatch = html.match(/data-cate-id="(\d+)"/) || html.match(/id="hdCate" value="(\d+)"/);
+            // Robust CateID Extraction
+            const cateMatch = html.match(/data-cate-id="(\d+)"/) ||
+                html.match(/id="hdCate" value="(\d+)"/) ||
+                html.match(/class="catID" value="(\d+)"/) ||
+                html.match(/document\.isParentCate\s*=\s*'(\d+)'/);
+
             if (cateMatch) cateId = cateMatch[1];
-
-            // If no cateId found, maybe generic search (difficult to page via API if generic)
-            // But let's try scraping the initial list first
-
-            // Initial products extract (RegEx/Cheerio-like extraction)
             const productRegex = /<li data-id="(\d+)"[^>]*>([\s\S]*?)<\/li>/g;
             let match;
             const initialProducts: CrawledProduct[] = [];
@@ -1065,39 +1038,69 @@ async function runDMX() {
             // If not, we just parse what we can and move on (search page might only have 1 page if no cateId)
 
             if (!cateId && isCategoryPage) {
-                // Try harder to find cateId on category page
-                const cateMatch2 = html.match(/class="catID" value="(\d+)"/); // Common in old structure
-                if (cateMatch2) cateId = cateMatch2[1];
+                // Try harder to find cateId on category page if not found in first pass
+                const cateMatch3 = html.match(/class="catID" value="(\d+)"/);
+                if (cateMatch3) cateId = cateMatch3[1];
             }
 
-            // Extract initial products from HTML (Regex for speed)
+            // Extract initial products from HTML (Robust Regex)
             const buildProductsFromHtml = (htmlContent: string): CrawledProduct[] => {
                 const items: CrawledProduct[] = [];
-                // Look for <a href="..." class="main-contain" ...> ... <h3>Name</h3> ... <strong class="price">...</strong>
-                const itemRegex = /<a href="([^"]+)" class="main-contain"[^>]*>[\s\S]*?<h3>(.*?)<\/h3>[\s\S]*?<strong class="price">(\d{1,3}(?:\.\d{3})*)₫?<\/strong>/g;
-                let m;
-                // Clean HTML slightly
                 const cleanHtml = htmlContent.replace(/\n/g, ' ');
-                while ((m = itemRegex.exec(cleanHtml)) !== null) {
-                    const href = m[1];
-                    const name = m[2].replace(/<[^>]+>/g, '').trim(); // Remove tags
-                    const priceStr = m[3].replace(/\./g, '');
-                    const price = parseInt(priceStr);
+
+                // Match the entire <a> tag that has class "main-contain"
+                const aTagRegex = /<a[^>]*class="[^"]*main-contain[^"]*"[^>]*>/g;
+                let m;
+                while ((m = aTagRegex.exec(cleanHtml)) !== null) {
+                    const fullTag = m[0];
+
+                    const hrefMatch = fullTag.match(/href=['"]([^'"]+)['"]/);
+                    const nameMatch = fullTag.match(/data-name=['"]([^'"]+)['"]/);
+                    const priceMatch = fullTag.match(/data-price=['"]([^'"]+)['"]/);
+                    const brandMatch = fullTag.match(/data-brand=['"]([^'"]+)['"]/);
+                    const cateMatch = fullTag.match(/data-cate=['"]([^'"]+)['"]/);
+
+                    const href = hrefMatch ? hrefMatch[1] : '';
+                    let name = nameMatch ? nameMatch[1] : '';
+                    let price = priceMatch ? Math.round(parseFloat(priceMatch[1])) : 0;
+
+                    if (!name || price === 0) {
+                        const contentStart = aTagRegex.lastIndex;
+                        const nextA = cleanHtml.indexOf('</a>', contentStart);
+                        const content = cleanHtml.substring(contentStart, nextA > 0 ? nextA : contentStart + 1000);
+
+                        if (!name) {
+                            const h3M = content.match(/<h3>(.*?)<\/h3>/);
+                            if (h3M) name = h3M[1].replace(/<[^>]+>/g, '').trim();
+                        }
+                        if (price === 0) {
+                            const priceM = content.match(/<strong class="price">([\d.]+)&?#?x?\d*;?<\/strong>/);
+                            if (priceM) price = parseInt(priceM[1].replace(/[^\d.]/g, '').replace(/\./g, ''));
+                        }
+                    }
 
                     if (name && price > 0) {
+                        let imageUrl = '';
+                        const imgM = fullTag.match(/src=['"]([^'"]+)['"]/) || fullTag.match(/data-src=['"]([^'"]+)['"]/);
+                        if (!imgM) {
+                            const contentStart = aTagRegex.lastIndex;
+                            const nextA = cleanHtml.indexOf('</a>', contentStart);
+                            const content = cleanHtml.substring(contentStart, nextA > 0 ? nextA : contentStart + 1000);
+                            const innerImgM = content.match(/<img[^>]*src=['"]([^'"]+)['"]/);
+                            if (innerImgM) imageUrl = innerImgM[1];
+                        } else {
+                            imageUrl = imgM[1];
+                        }
+
                         items.push({
-                            externalId: href, // temporary ID
+                            externalId: href,
                             externalUrl: BASE_URL + href,
                             name: name,
                             price: price,
-                            originalPrice: price, // logic to find real original price is harder via regex
-                            discountPercent: 0,
-                            rating: 0,
-                            reviewCount: 0,
-                            available: true,
-                            imageUrl: '', // Hard to regex image properly sometimes, skip for speed or add simplified regex
-                            brand: '',
-                            category: ''
+                            imageUrl: imageUrl,
+                            brand: brandMatch ? brandMatch[1] : '',
+                            category: cateMatch ? cateMatch[1] : '',
+                            available: true
                         });
                     }
                 }
@@ -1145,8 +1148,14 @@ async function runDMX() {
                     }
 
                     const json = await res.json();
-                    // Response is usually { listproducts: "<html>..." } or simple HTML string
-                    const listHtml = json.listproducts || json;
+
+                    // Fix: Ensure listHtml is a string
+                    let listHtml = '';
+                    if (json.listproducts) {
+                        listHtml = typeof json.listproducts === 'string' ? json.listproducts : '';
+                    } else if (typeof json === 'string') {
+                        listHtml = json;
+                    }
 
                     if (!listHtml || listHtml.trim().length < 100) {
                         emptyPages++;
@@ -1172,13 +1181,13 @@ async function runDMX() {
             console.error(`   ⚠️ Error:`, e.message);
         }
 
-        console.log(`   ✅ Keyword done: +${kwProducts} products\n`);
         if (kw.id !== -1) {
             try { await KeywordService.markCrawled(kw.id); } catch { }
         }
         await sleep(CONFIG.DELAY_BETWEEN_KEYWORDS);
     }
 
+    await browser.close();
     console.log(`\n🎉 DIENMAYXANH COMPLETE: ${totalNew} new products, ${ids.size} total\n`);
 }
 
@@ -1209,6 +1218,13 @@ async function runTGDD() {
 
     let totalNew = 0;
 
+    const browser = await puppeteerExtra.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
     for (let i = 0; i < keywords.length; i++) {
         const kw = keywords[i];
         if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
@@ -1218,61 +1234,100 @@ async function runTGDD() {
         let kwProducts = 0;
 
         try {
-            // Step 1: Get Initial Page for params
+            // Step 1: Get Initial Page for params via Fetch (Faster)
             const searchUrl = `${BASE_URL}/tim-kiem?key=${encodeURIComponent(kw.keyword.replace(/ /g, '+'))}`;
-            const initRes = await fetch(searchUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
-            });
+            let html = '';
+            let finalUrl = searchUrl;
 
-            if (!initRes.ok) {
-                console.error(`   ⚠️ Failed to load search page: ${initRes.status}`);
-                continue;
+            try {
+                const searchRes = await fetch(searchUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    }
+                });
+                if (searchRes.ok) {
+                    html = await searchRes.text();
+                    finalUrl = searchRes.url;
+                }
+            } catch (e) {
+                console.log(`   ⚠️ Fetch search failed, falling back to Puppeteer...`);
             }
 
-            const html = await initRes.text();
+            if (!html) {
+                await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                html = await page.content();
+                finalUrl = page.url();
+            }
 
-            // Check for redirect to category
-            const finalUrl = initRes.url;
             const isCategoryPage = !finalUrl.includes('/tim-kiem');
 
             let cateId = '';
-            const cateMatch = html.match(/data-cate-id="(\d+)"/) || html.match(/id="hdCate" value="(\d+)"/);
+            // Robust CateID Extraction
+            const cateMatch = html.match(/data-cate-id="(\d+)"/) ||
+                html.match(/id="hdCate" value="(\d+)"/) ||
+                html.match(/class="catID" value="(\d+)"/) ||
+                html.match(/document\.isParentCate\s*=\s*'(\d+)'/);
+
             if (cateMatch) cateId = cateMatch[1];
 
-            if (!cateId && isCategoryPage) {
-                const cateMatch2 = html.match(/class="catID" value="(\d+)"/);
-                if (cateMatch2) cateId = cateMatch2[1];
-            }
-
-            // Extract initial products from HTML
+            // Extract initial products from HTML (Robust Regex)
             const buildProductsFromHtml = (htmlContent: string): CrawledProduct[] => {
                 const items: CrawledProduct[] = [];
-                // TGDD slightly different HTML sometimes, but main-contain is consistent
-                const itemRegex = /<a href="([^"]+)" class="main-contain"[^>]*>[\s\S]*?<h3>(.*?)<\/h3>[\s\S]*?<strong class="price">(\d{1,3}(?:\.\d{3})*)₫?<\/strong>/g;
-                let m;
                 const cleanHtml = htmlContent.replace(/\n/g, ' ');
-                while ((m = itemRegex.exec(cleanHtml)) !== null) {
-                    const href = m[1];
-                    const name = m[2].replace(/<[^>]+>/g, '').trim();
-                    const priceStr = m[3].replace(/\./g, '');
-                    const price = parseInt(priceStr);
+                // Use a more relaxed regex that doesn't strictly depend on "main-contain"
+                // but matches items that look like TGDD/DMX product links
+                const aTagRegex = /<a[^>]*class="[^"]*(?:main-contain|item|product)[^"]*"[^>]*>/g;
+                let m;
+                while ((m = aTagRegex.exec(cleanHtml)) !== null) {
+                    const fullTag = m[0];
+
+                    const hrefMatch = fullTag.match(/href=['"]([^'"]+)['"]/);
+                    const nameMatch = fullTag.match(/data-name=['"]([^'"]+)['"]/);
+                    const priceMatch = fullTag.match(/data-price=['"]([^'"]+)['"]/);
+                    const brandMatch = fullTag.match(/data-brand=['"]([^'"]+)['"]/);
+                    const cateMatch = fullTag.match(/data-cate=['"]([^'"]+)['"]/);
+
+                    const href = hrefMatch ? hrefMatch[1] : '';
+                    let name = nameMatch ? nameMatch[1] : '';
+                    let price = priceMatch ? Math.round(parseFloat(priceMatch[1])) : 0;
+
+                    if (!name || price === 0) {
+                        const contentStart = aTagRegex.lastIndex;
+                        const nextA = cleanHtml.indexOf('</a>', contentStart);
+                        const content = cleanHtml.substring(contentStart, nextA > 0 ? nextA : contentStart + 1000);
+
+                        if (!name) {
+                            const h3M = content.match(/<h3>(.*?)<\/h3>/) || content.match(/<h3[^>]*>(.*?)<\/h3>/);
+                            if (h3M) name = h3M[1].replace(/<[^>]+>/g, '').trim();
+                        }
+                        if (price === 0) {
+                            const priceM = content.match(/<strong class="price">([\d.]+)&?#?x?\d*;?<\/strong>/) || content.match(/<span class="price">([\d.]+)&?#?x?\d*;?<\/span>/);
+                            if (priceM) price = parseInt(priceM[1].replace(/[^\d.]/g, '').replace(/\./g, ''));
+                        }
+                    }
 
                     if (name && price > 0) {
+                        let imageUrl = '';
+                        const imgM = fullTag.match(/src=['"]([^'"]+)['"]/) || fullTag.match(/data-src=['"]([^'"]+)['"]/);
+                        if (!imgM) {
+                            const contentStart = aTagRegex.lastIndex;
+                            const nextA = cleanHtml.indexOf('</a>', contentStart);
+                            const content = cleanHtml.substring(contentStart, nextA > 0 ? nextA : contentStart + 1000);
+                            const innerImgM = content.match(/<img[^>]*src=['"]([^'"]+)['"]/) || content.match(/<img[^>]*data-src=['"]([^'"]+)['"]/);
+                            if (innerImgM) imageUrl = innerImgM[1];
+                        } else {
+                            imageUrl = imgM[1];
+                        }
+
                         items.push({
                             externalId: href,
-                            externalUrl: BASE_URL + href,
+                            externalUrl: href.startsWith('http') ? href : BASE_URL + href,
                             name: name,
                             price: price,
-                            originalPrice: price,
-                            discountPercent: 0,
-                            rating: 0,
-                            reviewCount: 0,
-                            available: true,
-                            imageUrl: '',
-                            brand: '',
-                            category: ''
+                            imageUrl: imageUrl,
+                            brand: brandMatch ? brandMatch[1] : '',
+                            category: cateMatch ? cateMatch[1] : '',
+                            available: true
                         });
                     }
                 }
@@ -1282,7 +1337,7 @@ async function runTGDD() {
             let products = buildProductsFromHtml(html);
             kwProducts = saveProducts(SOURCE, SOURCE_ID, products);
             totalNew += kwProducts;
-            console.log(`   Page 1 (HTML): Found ${products.length} items, +${kwProducts} new`);
+            console.log(`   Page 1 (Puppeteer): Found ${products.length} items, +${kwProducts} new`);
 
             // Loop API if CateID found
             if (cateId) {
@@ -1311,10 +1366,16 @@ async function runTGDD() {
                     if (!res.ok) break;
 
                     const json = await res.json();
-                    const listHtml = json.listproducts || json; // sometimes returns just HTML string? CHECK LOGS if fails.
-                    // Actually DMX/TGDD returns { listproducts: "html" } usually
 
-                    if (!listHtml || (typeof listHtml === 'string' && listHtml.trim().length < 100)) {
+                    // Fix: Ensure listHtml is a string
+                    let listHtml = '';
+                    if (json && json.listproducts) {
+                        listHtml = typeof json.listproducts === 'string' ? json.listproducts : '';
+                    } else if (typeof json === 'string') {
+                        listHtml = json;
+                    }
+
+                    if (!listHtml || listHtml.trim().length < 100) {
                         emptyPages++;
                         if (emptyPages >= 1) break;
                         continue;
@@ -1342,6 +1403,7 @@ async function runTGDD() {
         await sleep(CONFIG.DELAY_BETWEEN_KEYWORDS);
     }
 
+    await browser.close();
     console.log(`\n🎉 THEGIOIDIDONG COMPLETE: ${totalNew} new products, ${ids.size} total\n`);
 }
 
