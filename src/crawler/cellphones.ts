@@ -60,6 +60,10 @@ export class CellphonesCrawler extends PuppeteerCrawlerBase {
             for (const item of items) {
                 // CellphoneS API: special_price is sale price, price is original
                 const finalPrice = item.special_price || item.price || 0;
+
+                // Skip if price is 0
+                if (finalPrice <= 0) continue;
+
                 const originalPrice = item.price || 0;
                 const discount = (originalPrice > finalPrice && originalPrice > 0)
                     ? Math.round(((originalPrice - finalPrice) / originalPrice) * 100)
@@ -397,7 +401,11 @@ export class CellphonesCrawler extends PuppeteerCrawlerBase {
 
                     // Clean up data
                     const cleanPrice = parseInt(priceTxt.replace(/[^\d]/g, '')) || 0;
-                    if (cleanPrice < 100000) return; // Ignore accessories < 100k or noise
+                    if (cleanPrice <= 0) return; // Skip zero price
+                    if (cleanPrice < 100000 && !nameFound.toLowerCase().includes('ốp') && !nameFound.toLowerCase().includes('dán')) {
+                        // Potential accessory, but let's keep it if name suggests it. 
+                        // For data quality, we mainly care about price > 0.
+                    }
 
                     const externalId = href;
 
