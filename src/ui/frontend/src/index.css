@@ -26,10 +26,11 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - hidden */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 0px;
+    height: 0px;
+    display: none;
 }
 
 ::-webkit-scrollbar-track {
@@ -38,12 +39,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #94a3b8, #64748b);
+    background: #cbd5e1;
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #64748b, #475569);
+    background: #94a3b8;
 }
 
 /* Glassmorphism utilities */

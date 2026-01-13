@@ -361,90 +361,31 @@ async def list_available_tables():
 @app.get("/api/stats")
 async def get_stats():
     """
-    Get dashboard statistics from the database.
-    Returns total products, platforms, brands, and distribution data.
+    Lấy thống kê dashboard bằng RPC (Xử lý phía Server).
+    Tối ưu cho dữ liệu lớn (>200k sản phẩm).
     """
-    logger.info("📊 Fetching dashboard statistics...")
-    
-    # Default response for empty/error cases
-    default_stats = {
-        "total_products": 0,
-        "total_platforms": 0,
-        "total_brands": 0,
-        "last_updated": None,
-        "platform_distribution": []
-    }
-    
-    # Try each table to find data
-    for table_name in SEARCH_TABLES:
-        try:
-            logger.info(f"   → Trying to get stats from '{table_name}'...")
+    logger.info("📊 Đang gọi RPC get_dashboard_stats...")
+    try:
+        # Gọi RPC: Database sẽ đếm và trả về kết quả cuối cùng trong tích tắc
+        response = supabase.rpc("get_dashboard_stats").execute()
+        
+        if response.data:
+            logger.info("✅ Lấy thống kê thành công!")
+            return response.data
             
-            # 1. Get total count
-            count_response = supabase.table(table_name).select("*", count="exact").limit(0).execute()
-            total_products = count_response.count or 0
-            
-            if total_products == 0:
-                logger.info(f"   ❌ No data in '{table_name}'")
-                continue
-            
-            logger.info(f"   ✅ Found {total_products} products in '{table_name}'")
-            
-            # 2. Get all data for aggregation (limit to reasonable amount)
-            data_response = supabase.table(table_name).select("*").limit(10000).execute()
-            raw_data = data_response.data or []
-            
-            # Normalize all products to fix platform names
-            data = [normalize_product_data(item) for item in raw_data]
-            
-            # 3. Calculate unique platforms
-            platforms = set()
-            platform_counts: Dict[str, int] = {}
-            for item in data:
-                platform = item.get("platform", "unknown")
-                platforms.add(platform)
-                platform_counts[platform] = platform_counts.get(platform, 0) + 1
-            
-            # 4. Calculate unique brands
-            brands = set()
-            for item in data:
-                brand = item.get("brand")
-                if brand:
-                    brands.add(brand)
-            
-            # 5. Get last updated timestamp
-            last_updated = None
-            for item in data:
-                timestamp = item.get("updated_at") or item.get("created_at")
-                if timestamp:
-                    if last_updated is None or timestamp > last_updated:
-                        last_updated = timestamp
-            
-            # 6. Build platform distribution
-            platform_distribution = [
-                {"name": name, "count": count}
-                for name, count in sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
-            ]
-            
-            result = {
-                "total_products": total_products,
-                "total_platforms": len(platforms),
-                "total_brands": len(brands),
-                "last_updated": last_updated,
-                "platform_distribution": platform_distribution,
-                "source_table": table_name
-            }
-            
-            logger.info(f"   ✅ Stats calculated: {total_products} products, {len(platforms)} platforms, {len(brands)} brands")
-            return result
-            
-        except Exception as e:
-            logger.warning(f"   ⚠️ Error getting stats from '{table_name}': {e}")
-            continue
-    
-    # No data found in any table
-    logger.warning("❌ No stats data found in any table")
-    return default_stats
+        raise Exception("RPC returned no data")
+        
+    except Exception as e:
+        logger.error(f"❌ Lỗi khi lấy thống kê: {e}")
+        # Fallback: Chỉ đếm tổng nếu RPC thất bại
+        count_resp = supabase.table("raw_products").select("*", count="exact").limit(0).execute()
+        return {
+            "total_products": count_resp.count or 0,
+            "total_platforms": 0,
+            "total_brands": 0,
+            "platform_distribution": [],
+            "message": "Vui lòng kiểm tra lại hàm RPC trên Supabase"
+        }
 
 
 # =============================================================================

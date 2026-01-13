@@ -53,11 +53,10 @@ function getPlatformColor(platform: string, index: number): string {
 }
 
 function formatDate(dateString: string | null | undefined): string {
-    if (!dateString) return 'Chưa cập nhật';
+    if (!dateString) return 'N/A';
     try {
         const date = new Date(dateString);
         return date.toLocaleDateString('vi-VN', {
-            year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
@@ -70,14 +69,13 @@ function formatDate(dateString: string | null | undefined): string {
 
 function capitalizeFirst(str: string): string {
     if (!str) return 'Unknown';
-    // Special cases for ecommerce platforms
     const platformNames: Record<string, string> = {
         'shopee': 'Shopee',
         'tiki': 'Tiki',
         'lazada': 'Lazada',
         'sendo': 'Sendo',
         'dienmayxanh': 'Điện Máy Xanh',
-        'thegioididong': 'Thế Giới Di Động',
+        'thegioididong': 'TGDĐ',
         'cellphones': 'CellphoneS',
         'fptshop': 'FPT Shop',
         'nguyenkim': 'Nguyễn Kim',
@@ -92,43 +90,27 @@ function capitalizeFirst(str: string): string {
 }
 
 // =============================================================================
-// LOADING SPINNER COMPONENT
-// =============================================================================
-
-function LoadingSpinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
-    const sizeClasses = {
-        sm: 'w-6 h-6',
-        md: 'w-10 h-10',
-        lg: 'w-16 h-16',
-    };
-    return (
-        <Loader2 className={`${sizeClasses[size]} animate-spin text-blue-500`} />
-    );
-}
-
-// =============================================================================
-// STAT CARD COMPONENT
+// STAT CARD COMPONENT - COMPACT
 // =============================================================================
 
 interface StatCardProps {
     icon: React.ReactNode;
     label: string;
     value: string | number;
-    bgColor: string;
-    iconColor: string;
+    color: string;
 }
 
-function StatCard({ icon, label, value, bgColor, iconColor }: StatCardProps) {
+function StatCard({ icon, label, value }: StatCardProps) {
     return (
-        <div className="bg-white/80 backdrop-blur-xl border border-white/30 shadow-xl shadow-black/5 rounded-2xl p-6 
-                        hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-            <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 ${bgColor} ${iconColor} rounded-xl flex items-center justify-center shadow-lg`}>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 
+                        hover:border-slate-300 transition-colors">
+            <div className="flex items-center gap-3">
+                <div className="w-9 h-9 flex items-center justify-center">
                     {icon}
                 </div>
-                <div>
-                    <p className="text-sm text-slate-500 font-medium">{label}</p>
-                    <p className="text-2xl font-bold text-slate-800">{value}</p>
+                <div className="min-w-0">
+                    <p className="text-xs text-slate-500 truncate">{label}</p>
+                    <p className="text-lg font-semibold text-slate-800">{value}</p>
                 </div>
             </div>
         </div>
@@ -147,10 +129,10 @@ interface TooltipPayload {
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipPayload[]; label?: string }) {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white/95 backdrop-blur-sm px-4 py-3 rounded-xl shadow-xl border border-slate-200">
-                <p className="font-semibold text-slate-800">{label}</p>
-                <p className="text-blue-600 font-bold text-lg">
-                    {payload[0].value.toLocaleString('vi-VN')} sản phẩm
+            <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200 text-sm">
+                <p className="font-medium text-slate-700">{label}</p>
+                <p className="text-emerald-600 font-semibold">
+                    {payload[0].value.toLocaleString('vi-VN')}
                 </p>
             </div>
         );
@@ -173,10 +155,9 @@ export default function DashboardPage() {
         try {
             const data = await getStats();
             setStats(data);
-            console.log('📊 Dashboard stats loaded:', data);
         } catch (err) {
-            setError('Không thể tải dữ liệu thống kê. Vui lòng thử lại.');
-            console.error('Dashboard error:', err);
+            setError('Không thể tải dữ liệu.');
+            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -186,7 +167,6 @@ export default function DashboardPage() {
         fetchStats();
     }, []);
 
-    // Prepare chart data with defensive checks
     const platformDistribution = stats?.platform_distribution || [];
 
     const barChartData = platformDistribution
@@ -206,43 +186,28 @@ export default function DashboardPage() {
         }))
         .filter(item => item.value > 0);
 
-    // =========================================================================
-    // LOADING STATE
-    // =========================================================================
+    // Loading
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="text-center">
-                    <div className="relative">
-                        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl animate-pulse">
-                            <Database className="w-10 h-10 text-white" />
-                        </div>
-                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2">
-                            <LoadingSpinner size="md" />
-                        </div>
-                    </div>
-                    <p className="mt-8 text-slate-600 font-medium">Đang tải dữ liệu thống kê...</p>
-                    <p className="text-slate-400 text-sm mt-2">Vui lòng đợi trong giây lát</p>
+                    <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
+                    <p className="text-slate-500 text-sm">Đang tải...</p>
                 </div>
             </div>
         );
     }
 
-    // =========================================================================
-    // ERROR STATE
-    // =========================================================================
+    // Error
     if (error) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-red-50 to-orange-50">
-                <div className="text-center max-w-md px-6">
-                    <div className="w-20 h-20 bg-gradient-to-br from-red-400 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-                        <AlertCircle className="w-10 h-10 text-white" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-slate-800 mb-3">Đã xảy ra lỗi</h2>
-                    <p className="text-slate-600 mb-6">{error}</p>
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="text-center">
+                    <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+                    <p className="text-slate-700 font-medium mb-3">{error}</p>
                     <button
                         onClick={fetchStats}
-                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400 transform hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                        className="px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600"
                     >
                         Thử lại
                     </button>
@@ -251,23 +216,18 @@ export default function DashboardPage() {
         );
     }
 
-    // =========================================================================
-    // MAIN DASHBOARD
-    // =========================================================================
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 py-8">
-            <div className="container mx-auto px-4 max-w-7xl">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div className="min-h-screen bg-slate-50">
+            <div className="max-w-[1400px] mx-auto px-6 py-6">
+                {/* Compact Header */}
+                <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                            Dashboard Thống Kê
-                        </h1>
-                        <p className="text-slate-600">
-                            Tổng quan về dữ liệu đã thu thập từ các sàn TMĐT
+                        <h1 className="text-base font-medium text-slate-800">Dashboard</h1>
+                        <p className="text-sm text-slate-500">
+                            Thống kê dữ liệu sản phẩm
                             {stats?.source_table && (
-                                <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">
-                                    📦 {stats.source_table}
+                                <span className="ml-2 text-xs text-slate-400">
+                                    • {stats.source_table}
                                 </span>
                             )}
                         </p>
@@ -275,102 +235,87 @@ export default function DashboardPage() {
                     <button
                         onClick={fetchStats}
                         disabled={loading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl 
-                       hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm
-                       disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 
+                                 bg-white border border-slate-200 rounded-lg hover:bg-slate-50
+                                 disabled:opacity-50 transition-colors"
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        <span className="font-medium">Làm mới</span>
+                        Làm mới
                     </button>
                 </div>
 
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                {/* Compact Stats Grid */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <StatCard
-                        icon={<Package className="w-7 h-7" />}
+                        icon={<Package className="w-4 h-4 text-blue-600" />}
                         label="Tổng sản phẩm"
                         value={formatNumber(stats?.total_products)}
-                        bgColor="bg-gradient-to-br from-blue-500 to-blue-600"
-                        iconColor="text-white"
+                        color="bg-blue-50"
                     />
                     <StatCard
-                        icon={<Store className="w-7 h-7" />}
-                        label="Số sàn TMĐT"
+                        icon={<Store className="w-4 h-4 text-emerald-600" />}
+                        label="Sàn TMĐT"
                         value={stats?.total_platforms || 0}
-                        bgColor="bg-gradient-to-br from-emerald-500 to-green-600"
-                        iconColor="text-white"
+                        color="bg-emerald-50"
                     />
                     <StatCard
-                        icon={<ShoppingBag className="w-7 h-7" />}
-                        label="Số thương hiệu"
+                        icon={<ShoppingBag className="w-4 h-4 text-purple-600" />}
+                        label="Thương hiệu"
                         value={formatNumber(stats?.total_brands)}
-                        bgColor="bg-gradient-to-br from-purple-500 to-violet-600"
-                        iconColor="text-white"
+                        color="bg-purple-50"
                     />
                     <StatCard
-                        icon={<Clock className="w-7 h-7" />}
-                        label="Cập nhật lần cuối"
+                        icon={<Clock className="w-4 h-4 text-amber-600" />}
+                        label="Cập nhật"
                         value={formatDate(stats?.last_updated)}
-                        bgColor="bg-gradient-to-br from-orange-500 to-amber-500"
-                        iconColor="text-white"
+                        color="bg-amber-50"
                     />
                 </div>
 
-                {/* Charts Section */}
-                <div className="grid lg:grid-cols-2 gap-6 mb-8">
-                    {/* Bar Chart - Products by Platform */}
-                    <div className="bg-white/80 backdrop-blur-xl border border-white/30 shadow-xl rounded-2xl p-6">
-                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <Database className="w-4 h-4 text-blue-600" />
-                            </div>
-                            Số sản phẩm theo sàn
-                        </h3>
+                {/* Charts Row */}
+                <div className="grid lg:grid-cols-2 gap-4 mb-8">
+                    {/* Bar Chart */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Database className="w-4 h-4 text-slate-400" />
+                            <h3 className="text-base font-medium text-slate-700">Sản phẩm theo sàn</h3>
+                        </div>
                         {barChartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height={320}>
-                                <BarChart data={barChartData} layout="vertical" margin={{ left: 20, right: 30 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={true} vertical={false} />
+                                <BarChart data={barChartData} layout="vertical" margin={{ left: 10, right: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal vertical={false} />
                                     <XAxis
                                         type="number"
                                         tickFormatter={formatNumber}
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fill: '#64748b', fontSize: 12 }}
+                                        tick={{ fill: '#94a3b8', fontSize: 11 }}
                                     />
                                     <YAxis
                                         type="category"
                                         dataKey="name"
-                                        width={130}
+                                        width={100}
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fill: '#334155', fontSize: 13, fontWeight: 500 }}
+                                        tick={{ fill: '#475569', fontSize: 14 }}
                                     />
                                     <Tooltip content={<CustomTooltip />} />
-                                    <Bar
-                                        dataKey="products"
-                                        radius={[0, 8, 8, 0]}
-                                        maxBarSize={40}
-                                    />
+                                    <Bar dataKey="products" radius={[0, 4, 4, 0]} maxBarSize={28} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="h-[320px] flex items-center justify-center">
-                                <div className="text-center text-slate-400">
-                                    <Database className="w-16 h-16 mx-auto mb-3 opacity-30" />
-                                    <p className="font-medium">Chưa có dữ liệu</p>
-                                </div>
+                            <div className="h-[320px] flex items-center justify-center text-slate-400 text-sm">
+                                Chưa có dữ liệu
                             </div>
                         )}
                     </div>
 
-                    {/* Pie Chart - Distribution */}
-                    <div className="bg-white/80 backdrop-blur-xl border border-white/30 shadow-xl rounded-2xl p-6">
-                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                                <TrendingUp className="w-4 h-4 text-purple-600" />
-                            </div>
-                            Tỷ lệ phân bố sản phẩm
-                        </h3>
+                    {/* Pie Chart */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <TrendingUp className="w-4 h-4 text-slate-400" />
+                            <h3 className="text-base font-medium text-slate-700">Tỷ lệ phân bố</h3>
+                        </div>
                         {pieChartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height={320}>
                                 <PieChart>
@@ -378,68 +323,56 @@ export default function DashboardPage() {
                                         data={pieChartData}
                                         cx="50%"
                                         cy="45%"
-                                        innerRadius={70}
-                                        outerRadius={110}
-                                        paddingAngle={3}
+                                        innerRadius={55}
+                                        outerRadius={85}
+                                        paddingAngle={2}
                                         dataKey="value"
-                                        label={({ name, percent }) =>
-                                            percent > 0.05 ? `${name} (${(percent * 100).toFixed(0)}%)` : ''
-                                        }
-                                        labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
                                     >
                                         {pieChartData.map((entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={entry.color}
-                                                stroke="#fff"
-                                                strokeWidth={2}
-                                            />
+                                            <Cell key={`cell-${index}`} fill={entry.color} stroke="#fff" strokeWidth={2} />
                                         ))}
                                     </Pie>
                                     <Tooltip
                                         formatter={(value: number) => [value.toLocaleString('vi-VN'), 'Sản phẩm']}
                                         contentStyle={{
-                                            borderRadius: '12px',
-                                            border: 'none',
-                                            boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-                                            padding: '12px 16px'
+                                            borderRadius: '8px',
+                                            border: '1px solid #e2e8f0',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                                            padding: '8px 12px',
+                                            fontSize: '12px'
                                         }}
                                     />
                                     <Legend
                                         verticalAlign="bottom"
                                         height={36}
-                                        formatter={(value) => <span className="text-slate-600 font-medium">{value}</span>}
+                                        iconSize={10}
+                                        formatter={(value) => <span className="text-sm text-slate-600">{value}</span>}
                                     />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="h-[320px] flex items-center justify-center">
-                                <div className="text-center text-slate-400">
-                                    <TrendingUp className="w-16 h-16 mx-auto mb-3 opacity-30" />
-                                    <p className="font-medium">Chưa có dữ liệu</p>
-                                </div>
+                            <div className="h-[320px] flex items-center justify-center text-slate-400 text-sm">
+                                Chưa có dữ liệu
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Platform Distribution Table */}
+                {/* Compact Table */}
                 {barChartData.length > 0 && (
-                    <div className="bg-white/80 backdrop-blur-xl border border-white/30 shadow-xl rounded-2xl p-6 mb-8">
-                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                                <Store className="w-4 h-4 text-green-600" />
-                            </div>
-                            Chi tiết phân bố theo sàn
-                        </h3>
+                    <div className="bg-white border border-slate-200 rounded-xl p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Store className="w-4 h-4 text-slate-400" />
+                            <h3 className="text-sm font-medium text-slate-700">Chi tiết phân bố</h3>
+                        </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full">
+                            <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="text-left border-b-2 border-slate-100">
-                                        <th className="pb-4 text-slate-500 font-semibold text-sm uppercase tracking-wide">Sàn TMĐT</th>
-                                        <th className="pb-4 text-slate-500 font-semibold text-sm uppercase tracking-wide text-right">Số sản phẩm</th>
-                                        <th className="pb-4 text-slate-500 font-semibold text-sm uppercase tracking-wide text-right">Tỷ lệ</th>
-                                        <th className="pb-4 text-slate-500 font-semibold text-sm uppercase tracking-wide w-1/3">Biểu đồ</th>
+                                    <tr className="border-b border-slate-100">
+                                        <th className="pb-3 text-left text-xs font-medium text-slate-500 uppercase">Sàn</th>
+                                        <th className="pb-3 text-right text-xs font-medium text-slate-500 uppercase">Số lượng</th>
+                                        <th className="pb-3 text-right text-xs font-medium text-slate-500 uppercase">Tỷ lệ</th>
+                                        <th className="pb-3 text-xs font-medium text-slate-500 uppercase w-1/3">Biểu đồ</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -448,26 +381,26 @@ export default function DashboardPage() {
                                             ? ((item.products / (stats?.total_products ?? 1)) * 100).toFixed(1)
                                             : '0';
                                         return (
-                                            <tr key={index} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                                                <td className="py-4">
-                                                    <div className="flex items-center gap-3">
+                                            <tr key={index} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                                                <td className="py-3">
+                                                    <div className="flex items-center gap-2">
                                                         <div
-                                                            className="w-4 h-4 rounded-full shadow-sm"
+                                                            className="w-2.5 h-2.5 rounded-full"
                                                             style={{ backgroundColor: item.fill }}
                                                         />
-                                                        <span className="font-semibold text-slate-800">{item.name}</span>
+                                                        <span className="font-medium text-slate-700">{item.name}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 text-right font-bold text-slate-700">
+                                                <td className="py-3 text-right font-medium text-slate-800">
                                                     {item.products.toLocaleString('vi-VN')}
                                                 </td>
-                                                <td className="py-4 text-right text-slate-500 font-medium">
+                                                <td className="py-3 text-right text-slate-500">
                                                     {percentage}%
                                                 </td>
-                                                <td className="py-4">
-                                                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                                                <td className="py-3">
+                                                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                                                         <div
-                                                            className="h-full rounded-full transition-all duration-500"
+                                                            className="h-full rounded-full"
                                                             style={{
                                                                 width: `${percentage}%`,
                                                                 backgroundColor: item.fill
@@ -485,12 +418,9 @@ export default function DashboardPage() {
                 )}
 
                 {/* Footer */}
-                <div className="text-center py-6">
-                    <p className="text-slate-400 text-sm">
-                        SEG301 - Search Engines & Information Retrieval
-                    </p>
-                    <p className="text-slate-300 text-xs mt-1">
-                        Powered by BM25 + Vector Search (Hybrid)
+                <div className="text-center py-6 mt-4">
+                    <p className="text-xs text-slate-400">
+                        SEG301 • BM25 + Vector Search
                     </p>
                 </div>
             </div>
