@@ -73,12 +73,12 @@ export default function SearchPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            {/* Main Layout with side margins */}
-            <div className="max-w-[1400px] mx-auto px-6">
-                <div className="flex gap-6">
-                    {/* Left Sidebar - Filter */}
-                    <aside className="hidden lg:block w-64 flex-shrink-0 bg-white">
-                        <div className="sticky top-20 pt-4 p-4">
+            {/* Main Layout - 3 columns: Filter | Search+Results */}
+            <div className="container-app">
+                <div className="flex">
+                    {/* Left Sidebar - Filter (Fixed height, scrollable) */}
+                    <aside className="hidden lg:block w-64 flex-shrink-0 border-r border-slate-100 bg-white">
+                        <div className="sticky top-14 h-[calc(100vh-56px)] overflow-y-auto scrollbar-hide p-4">
                             <FilterSidebar
                                 selectedPlatforms={selectedPlatforms}
                                 onPlatformChange={setSelectedPlatforms}
@@ -96,7 +96,7 @@ export default function SearchPage() {
                     {/* Right Side - Search Bar + Results */}
                     <div className="flex-1 min-w-0">
                         {/* Search Bar - Sticky */}
-                        <div className="sticky top-14 z-40 bg-white border border-slate-100 rounded-xl py-2 px-2 mb-4">
+                        <div className="sticky top-14 z-40 bg-white border-b border-slate-100 py-4 px-4">
                             <SearchBar
                                 initialQuery={query}
                                 onSearch={handleSearch}
@@ -109,8 +109,7 @@ export default function SearchPage() {
                             {/* No Query State */}
                             {!query && (
                                 <div className="text-center py-20 animate-fade-in">
-                                    <div className="w-16 h-16 mx-auto mb-4 bg-emerald-100 rounded-2xl 
-                                                  flex items-center justify-center">
+                                    <div className="w-16 h-16 mx-auto mb-4 bg-emerald-100 rounded-2xl flex items-center justify-center">
                                         <Search className="w-8 h-8 text-emerald-500" />
                                     </div>
                                     <h2 className="text-lg font-semibold text-slate-700 mb-2">
@@ -136,6 +135,10 @@ export default function SearchPage() {
                                             <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded">
                                                 <Clock className="w-3 h-3" />
                                                 {results.execution_time_ms.toFixed(0)}ms
+                                            </span>
+                                            <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded font-medium">
+                                                <Sparkles className="w-3 h-3" />
+                                                HYBRID
                                             </span>
                                         </div>
                                     </div>
@@ -169,7 +172,7 @@ export default function SearchPage() {
                             )}
 
                             {/* Loading */}
-                            {loading && <LoadingGrid count={6} grouped={viewMode === 'grouped'} />}
+                            {loading && <LoadingGrid count={6} />}
 
                             {/* Error */}
                             {error && (
