@@ -177,3 +177,33 @@
     - Crawlers now operating in **API Mode**.
     - Able to fetch hundreds of products per keyword in seconds.
 
+
+## Date: 2026-01-18 (Session 6)
+**Task:** Implement Chotot Crawler & Standardize Keywords
+
+**User:** "Implementation Chotot Crawler" + "Update keywords/categories specifically for each platform" + "Output consistency".
+
+**AI:**
+1.  **Implemented Chotot Crawler (API-First):**
+    - **Discovery:** Identified undocumented public API `gateway.chotot.com` (no HTML parsing needed).
+    - **Implementation:** Created `ChototCrawler` class and integrated into `crawl_to_json.ts`.
+    - **Standardization:**
+      - Assigned Source ID `7`.
+      - Output format matches `products.jsonl` schema.
+      - Implemented **Brand Extraction Heuristic** (e.g., Title "iPhone 13" -> Brand "Apple") to ensure data comparability with TGDD/Cellphones.
+      - Verified Deduplication logic (uses shared `loadExistingIds`).
+
+2.  **Platform-Specific Keyword Refresh:**
+    - **Problem:** Generic keywords were causing crawlers to search for irrelevant items (e.g., "Fridge" on CellphoneS) or return 0 results.
+    - **Solution:**
+      - Used **Browser Subagent** to scrape full Category Trees from **TGDD, Dienmayxanh, CellphoneS, Tiki, Lazada, and Chotot**.
+      - **Database Migration:**
+        - Archived old generic keywords.
+        - Inserted **79+ new platform-specific keywords/categories**.
+        - Used `applies_to` array to strictly bind keywords to their respective platforms (e.g., "Tủ lạnh" only for DMX/Chotot/Tiki).
+
+3.  **Status:**
+    - Chotot crawler is active and efficient.
+    - All 7 platforms now have tailored crawl targets.
+    - Data consistency ensured across all sources.
+
