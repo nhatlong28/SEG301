@@ -5,7 +5,7 @@ import json
 from collections import defaultdict
 
 class SPIMIIndexer:
-    def __init__(self, block_size_limit_mb=200, output_dir="output_blocks"):
+    def __init__(self, block_size_limit_mb=200, output_dir="src/indexer/output_blocks"):
         self.block_size_limit = block_size_limit_mb * 1024 * 1024
         self.output_dir = output_dir
         self.dictionary = defaultdict(dict) # {term: {doc_id: tf}}

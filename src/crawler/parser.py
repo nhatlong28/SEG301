@@ -20,8 +20,8 @@ def aggregate_shop_data(root_data_path="data", output_filename="total_products.j
                     print(f"--- Processing shop: {shop_dir.name} ---")
                     with open(jsonl_path, 'r', encoding='utf-8') as infile:
                         for line in infile:
-                            # Strip unusual line terminators and write with standard \n
-                            clean_line = line.strip('\u2028\u2029\r\n')
+                            # Robustly remove unusual line terminators from the entire line
+                            clean_line = line.replace('\u2028', '').replace('\u2029', '').strip('\r\n')
                             if clean_line:
                                 outfile.write(clean_line + '\n')
     

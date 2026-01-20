@@ -23,13 +23,13 @@ def build_index():
         return
 
     # 2. SPIMI Indexing
-    # Outputting blocks to 'output_blocks'
-    indexer = SPIMIIndexer(block_size_limit_mb=100, output_dir="output_blocks")
+    # Outputting blocks to 'src/indexer/output_blocks'
+    indexer = SPIMIIndexer(block_size_limit_mb=100, output_dir="src/indexer/output_blocks")
     indexer.run_indexing(product_gen)
     
     # 3. Merging
     print("Merging blocks...")
-    merge_blocks(block_dir="output_blocks", output_file="src/indexer/final_index.bin", lexicon_file="src/indexer/lexicon.dat")
+    merge_blocks(block_dir="src/indexer/output_blocks", output_file="src/indexer/final_index.bin", lexicon_file="src/indexer/lexicon.dat")
     
     print(f"Indexing completed in {time.time() - start_time:.2f} seconds.")
 
@@ -37,7 +37,7 @@ def search_loop():
     print("Loading Search Engine...")
     
     # Load Metadata
-    meta_path = os.path.join("output_blocks", "metadata.pkl")
+    meta_path = os.path.join("src/indexer/output_blocks", "metadata.pkl")
     if not os.path.exists(meta_path):
         print("Metadata not found. Please run indexing first.")
         return

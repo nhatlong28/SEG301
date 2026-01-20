@@ -16,7 +16,7 @@
 - `src/indexer/merging.py`: K-Way Merge logic for binary blocks.
 - `src/indexer/reader.py`: Optimized `IndexReader` using `seek()` and `read()`.
 - `src/ranking/bm25.py`: High-performance vectorized BM25 using NumPy.
-- `test_console.py`: CLI for building index (`--index`) and searching (`--search`).
+- `console_app.py`: CLI for building index (`--index`) and searching (`--search`).
 
 **User:** Created `requirements.txt` and installed dependencies after a `ModuleNotFoundError`.
 
@@ -33,16 +33,16 @@
 - Refactored `src/crawler/parser.py` to yield data from the JSON file instead of Supabase.
 - Provided a clear implementation without internal thinking comments in code.
 
-**User:** Refactor `test_console.py` and `parser.py` to use a dynamic `data_path` variable for the JSON source.
+**User:** Refactor `console_app.py` and `parser.py` to use a dynamic `data_path` variable for the JSON source.
 
 **AI:**
-- Modified `test_console.py`.
+- Modified `console_app.py`.
 - Updated `src/crawler/parser.py` to accept `data_path` as a parameter for more flexible localized testing.
 
-**User:** Refactor `test_console.py` to remove database dependencies and use `sample.json` for retrieving product details in the search loop.
+**User:** Refactor `console_app.py` to remove database dependencies and use `sample.json` for retrieving product details in the search loop.
 
 **AI:**
-- Removed `psycopg2` and `python-dotenv` from `test_console.py`.
+- Removed `psycopg2` and `python-dotenv` from `console_app.py`.
 - Updated `search_loop` to load `data/sample.json` into a dictionary for fast ID-to-name lookup.
 - Cleaned up database connection/cleanup logic.
 
@@ -57,16 +57,30 @@
 
 **AI:**
 - Updated `src/indexer/merging.py` and `src/indexer/reader.py` to use `src/indexer/` as the default path for index files.
-- Refactored `test_console.py` to match the new file locations in `src/indexer/`.
+- Refactored `console_app.py` to match the new file locations in `src/indexer/`.
 - Updated `.gitignore` to ignore the relocated binary files within `src/indexer/`.
 
-
-**User:** Fix the issue where `test_console.py` and `parser.py` encountered unusual line terminators (LS/PS) or JSONL formatting errors during search.
+**User:** Fix the issue where `console_app.py` and `parser.py` encountered unusual line terminators (LS/PS) or JSONL formatting errors during search.
 
 **AI:**
 - Updated `aggregate_shop_data` in `src/crawler/parser.py` to strip unusual line terminators (`\u2028`, `\u2029`) and ensure standard `\n` line endings.
-- Identified that `test_console.py` needs refactoring to read `total_products.jsonl` line-by-line for product detail lookup instead of using `json.load()`.
+- Identified that `console_app.py` needs refactoring to read `total_products.jsonl` line-by-line for product detail lookup instead of using `json.load()`.
 
+## Date: 2026-01-20
 
+**Task:** Project Organization & Data Integrity
 
+**User:** Request to move the `output_blocks` folder into `src/indexer`.
+
+**AI:**
+- Updated `src/indexer/spimi.py` and `src/indexer/merging.py` to use `src/indexer/output_blocks` as the default directory for intermediate blocks.
+- Refactored `console_app.py` to update all references to the `output_blocks` directory and metadata path.
+- Renamed the main entry point from `test_console.py` to `console_app.py` for clarity.
+
+**User:** Reported unusual line terminators (LS/PS) in `total_products.jsonl`.
+
+**AI:**
+- Improved the `aggregate_shop_data` function in `src/crawler/parser.py` to robustly remove `\u2028` and `\u2029` characters from the entire line.
+- Created a utility script `src/scripts/clean_jsonl.py` to repair the existing `total_products.jsonl` file, fixing 2 problematic lines.
+- Verified the fix by running the indexing pipeline successfully.
 

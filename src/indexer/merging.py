@@ -3,7 +3,7 @@ import os
 import heapq
 from contextlib import ExitStack
 
-def merge_blocks(block_dir="output_blocks", output_file="src/indexer/final_index.bin", lexicon_file="src/indexer/lexicon.dat"):
+def merge_blocks(block_dir="src/indexer/output_blocks", output_file="src/indexer/final_index.bin", lexicon_file="src/indexer/lexicon.dat"):
     """
     Performs K-Way Merge on block files.
     """
