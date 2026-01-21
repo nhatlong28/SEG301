@@ -1,0 +1,15 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+
+# Vietnamese NLP
+pyvi
+underthesea
+
+# Vector Search
+sentence-transformers
+
+# Utilities
+numpy
