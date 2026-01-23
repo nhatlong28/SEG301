@@ -15,8 +15,8 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 puppeteerExtra.use(StealthPlugin());
 
 const CONFIG = {
-    TARGET_PRODUCTS: 300000,
-    MAX_PAGES_PER_KEYWORD: 50,
+    TARGET_PRODUCTS: 500000,  // Mục tiêu 500k sản phẩm mỗi sàn
+    MAX_PAGES_PER_KEYWORD: 100,
 };
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -103,9 +103,11 @@ async function runCellphones() {
     const G_URL = 'https://api.cellphones.com.vn/graphql-search/v2/graphql/query';
     const ids = loadExistingIds(SOURCE);
     const keywords = await KeywordService.getKeywords(SOURCE, undefined, 24);
+    const allKeywords = await KeywordService.getKeywords('all', undefined, 24);
+    const combinedKeywords = [...keywords, ...allKeywords.filter(k => !keywords.find(kw => kw.keyword === k.keyword))];
 
-    console.log(`🚀 [Cellphones] Processing ${keywords.length} keywords...`);
-    for (const kw of keywords) {
+    console.log(`🚀 [Cellphones] Processing ${combinedKeywords.length} keywords...`);
+    for (const kw of combinedKeywords) {
         if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
         for (let pNum = 1; pNum <= 50; pNum++) {
             try {
@@ -129,9 +131,44 @@ async function runTiki() {
     const API_URL = 'https://tiki.vn/api/v2/products';
     const ids = loadExistingIds(SOURCE);
     const keywords = await KeywordService.getKeywords(SOURCE, undefined, 24);
+    const allKeywords = await KeywordService.getKeywords('all', undefined, 24);
+    const combinedKeywords = [...keywords, ...allKeywords.filter(k => !keywords.find(kw => kw.keyword === k.keyword))];
 
     console.log(`🚀 [Tiki] Processing Categories... (Total: ${ids.size})`);
-    const cats = [1789, 1846, 4221, 1815, 1801, 1883, 1795, 1847, 8594, 27498, 17166, 17451];
+    // EXPANDED: All main categories from Tiki
+    const cats = [
+        // Điện thoại & Máy tính bảng
+        1789, 1795, 28856,
+        // Laptop - Máy Vi Tính - Linh kiện
+        1846, 1847, 8060, 8061, 8062, 8089,
+        // Điện Gia Dụng
+        1883, 4834, 4833, 4832, 4831, 4830, 4829, 4835, 4836, 4837,
+        // Tivi - Thiết bị nghe nhìn
+        1815, 4880, 4882, 4884,
+        // Thiết bị số - Phụ kiện số  
+        1801, 8055, 8056, 8057, 8058, 8059,
+        // Máy ảnh - Quay phim
+        1882, 4870, 4871, 4872, 4873,
+        // Điện tử - Điện lạnh
+        4221, 8139, 8140, 8141, 8142,
+        // Đồng hồ và Trang sức
+        8594, 8600, 8601, 8602,
+        // Nhà cửa - Đời sống
+        1686, 17166, 17167, 17168,
+        // Sách, VPP
+        8322, 316, 393, 320, 846,
+        // Đồ chơi
+        27498, 27499, 27500,
+        // Mẹ và bé  
+        2549, 2550, 2551, 2552,
+        // Làm đẹp - Sức khỏe
+        1520, 1521, 1522, 1523, 1524,
+        // Thể thao
+        1975, 1976, 1977, 1978,
+        // Xe cộ
+        8594
+    ];
+    /*
     for (const cid of cats) {
         for (let pNum = 1; pNum <= 50; pNum++) {
             try {
@@ -146,11 +183,12 @@ async function runTiki() {
             } catch { break; }
         }
     }
-    for (const kw of keywords) {
+    */
+    for (const kw of combinedKeywords) {
         if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
         for (let pNum = 1; pNum <= 30; pNum++) {
             try {
-                const r = await fetch(`${API_URL}?q=${encodeURIComponent(kw.keyword)}&page=${pNum}&limit=40`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+                const r = await fetch(`${API_URL}?q=${encodeURIComponent(kw.keyword)}&page=${pNum}&limit=100`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
                 const json: any = await r.json();
                 const items = json.data || [];
                 if (items.length === 0) break;
@@ -168,11 +206,13 @@ async function runLazada() {
     const SOURCE = 'lazada';
     const ids = loadExistingIds(SOURCE);
     const keywords = await KeywordService.getKeywords(SOURCE, undefined, 24);
-    const browser = await puppeteerExtra.launch({ headless: false, args: ['--window-size=1280,800'] });
+    const allKeywords = await KeywordService.getKeywords('all', undefined, 24);
+    const combinedKeywords = [...keywords, ...allKeywords.filter(k => !keywords.find(kw => kw.keyword === k.keyword))];
+    const browser = await puppeteerExtra.launch({ headless: true, args: ['--window-size=1280,800'] });
     const page = await browser.newPage();
 
-    console.log(`🚀 [Lazada] Processing ${keywords.length} keywords...`);
-    for (const kw of keywords) {
+    console.log(`🚀 [Lazada] Processing ${combinedKeywords.length} keywords...`);
+    for (const kw of combinedKeywords) {
         if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
         for (let pNum = 1; pNum <= 30; pNum++) {
             try {
@@ -214,22 +254,63 @@ async function runLazada() {
 async function runMWG(source: string, sourceId: number, baseUrl: string) {
     const ids = loadExistingIds(source);
     const keywords = await KeywordService.getKeywords(source, undefined, 24);
+    // Also get 'all' keywords
+    const allKeywords = await KeywordService.getKeywords('all', undefined, 24);
+    const combinedKeywords = [...keywords, ...allKeywords.filter(k => !keywords.find(kw => kw.keyword === k.keyword))];
+
     const browser = await puppeteerExtra.launch({ headless: true });
     const page = await browser.newPage();
     await page.setViewport({ width: 1366, height: 768 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-    console.log(`🚀 [${source.toUpperCase()}] Processing ${keywords.length} keywords...`);
+    console.log(`🚀 [${source.toUpperCase()}] Processing ${combinedKeywords.length} keywords...`);
 
     // Selectors optimized for both Search and Category pages
     const pS = '.listproduct li.item, li.item.ajaxed, a.main-contain, .list-product li.item, .product-list li.item, .category-products li.item';
     const bS = '.view-more a, .viewmore a, a.view-more, .view-more, .btn-viewmore';
 
-    // 1. Crawl Categories first for high volume
+    // 1. Crawl Categories first for high volume - EXPANDED LIST
     const categories = source === 'dienmayxanh'
-        ? ['tivi', 'tu-lanh', 'may-giat', 'may-lanh-dieu-hoa', 'gia-dung', 'quat', 'binh-dun-sieu-toc', 'noi-com-dien', 'bep-ga', 'bep-tu', 'lo-vi-song', 'may-hut-bui']
-        : ['dtdd', 'laptop', 'tablet', 'apple', 'phu-kien', 'dong-ho-thong-minh', 'pc-may-tinh-ban'];
+        ? [
+            // TV & Display
+            'tivi', 'tivi-samsung', 'tivi-lg', 'tivi-sony', 'tivi-xiaomi', 'tivi-casper', 'tivi-tcl', 'tivi-hisense',
+            // Tủ lạnh
+            'tu-lanh', 'tu-lanh-samsung', 'tu-lanh-lg', 'tu-lanh-panasonic', 'tu-lanh-hitachi', 'tu-lanh-toshiba', 'tu-lanh-sharp', 'tu-lanh-aqua', 'tu-dong', 'tu-mat',
+            // Máy giặt
+            'may-giat', 'may-giat-samsung', 'may-giat-lg', 'may-giat-electrolux', 'may-giat-panasonic', 'may-giat-toshiba', 'may-giat-aqua', 'may-say-quan-ao',
+            // Điều hòa
+            'may-lanh-dieu-hoa', 'may-lanh-daikin', 'may-lanh-panasonic', 'may-lanh-lg', 'may-lanh-samsung', 'may-lanh-toshiba', 'may-lanh-casper', 'may-lanh-mitsubishi',
+            // Gia dụng nhà bếp
+            'noi-chien-khong-dau', 'noi-com-dien', 'bep-tu', 'bep-ga', 'bep-hong-ngoai', 'lo-vi-song', 'may-xay-sinh-to', 'may-ep-trai-cay', 'am-dun-sieu-toc', 'binh-thuy-dien',
+            // Thiết bị làm sạch
+            'may-hut-bui', 'robot-hut-bui', 'may-loc-khong-khi', 'may-loc-nuoc', 'may-rua-chen',
+            // Thiết bị điện
+            'quat', 'quat-dieu-hoa', 'may-nuoc-nong', 'binh-nong-lanh',
+            // Âm thanh
+            'loa', 'loa-bluetooth', 'loa-karaoke', 'dan-am-thanh', 'micro',
+            // Camera
+            'camera-giam-sat', 'camera-ip', 'camera-wifi',
+            // Sức khỏe
+            'ghe-massage', 'may-say-toc', 'may-cao-rau', 'ban-ui', 'may-tam-nuoc'
+        ]
+        : [
+            // Điện thoại
+            'dtdd', 'dtdd-iphone', 'dtdd-samsung', 'dtdd-xiaomi', 'dtdd-oppo', 'dtdd-vivo', 'dtdd-realme', 'dtdd-nokia', 'dtdd-tecno', 'dtdd-infinix', 'dtdd-honor', 'dtdd-asus',
+            // Laptop
+            'laptop', 'laptop-asus', 'laptop-dell', 'laptop-hp', 'laptop-lenovo', 'laptop-acer', 'laptop-msi', 'laptop-apple-macbook', 'laptop-lg', 'laptop-gigabyte',
+            // Tablet
+            'tablet', 'ipad', 'tablet-samsung', 'tablet-xiaomi', 'tablet-lenovo', 'tablet-huawei',
+            // Apple
+            'apple', 'iphone', 'ipad', 'apple-watch', 'airpods', 'macbook',
+            // Phụ kiện
+            'phu-kien', 'sac-du-phong', 'sac-cap', 'op-lung', 'mieng-dan-cuong-luc', 'tai-nghe', 'tai-nghe-bluetooth', 'loa-bluetooth',
+            // Đồng hồ
+            'dong-ho-thong-minh', 'apple-watch', 'samsung-galaxy-watch', 'garmin', 'xiaomi-watch', 'huawei-watch',
+            // PC
+            'pc-may-tinh-ban', 'man-hinh-may-tinh', 'may-in', 'chuot-ban-phim', 'webcam', 'linh-kien-may-tinh'
+        ];
 
+    /*
     console.log(`🚀 [${source.toUpperCase()}] Swiping Categories first...`);
     for (const catPath of categories) {
         try {
@@ -252,7 +333,13 @@ async function runMWG(source: string, sourceId: number, baseUrl: string) {
                         const priceStr = a.getAttribute('data-price') || el.querySelector('.price, strong, .item-txt-online')?.textContent?.replace(/[^\d]/g, '') || '0';
                         const price = parseInt(priceStr);
 
-                        return { externalId: finalId, externalUrl: a.href, name, price, imageUrl: el.querySelector('img')?.src };
+                        // Fix URL: ensure proper format with base domain
+                        let fullUrl = a.href;
+                        if (!fullUrl.startsWith('http')) {
+                            fullUrl = 'https://www.thegioididong.com' + (fullUrl.startsWith('/') ? '' : '/') + fullUrl;
+                        }
+
+                        return { externalId: finalId, externalUrl: fullUrl, name, price, imageUrl: el.querySelector('img')?.src };
                     }).filter(i => i && i.name && i.price > 0);
                 }, pS);
 
@@ -275,9 +362,10 @@ async function runMWG(source: string, sourceId: number, baseUrl: string) {
             }
         } catch { }
     }
+    */
 
-    // 2. Crawl Keywords
-    for (const kw of keywords) {
+    // 2. Crawl Keywords (combined source-specific + global)
+    for (const kw of combinedKeywords) {
         if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
         try {
             await page.goto(`${baseUrl}/tim-kiem?key=${encodeURIComponent(kw.keyword)}`, { waitUntil: 'domcontentloaded' });
@@ -324,6 +412,8 @@ async function runChotot() {
     const API_URL = 'https://gateway.chotot.com/v1/public/ad-listing';
     const ids = loadExistingIds(SOURCE);
     const keywords = await KeywordService.getKeywords(SOURCE, undefined, 24);
+    const allKeywords = await KeywordService.getKeywords('all', undefined, 24);
+    const combinedKeywords = [...keywords, ...allKeywords.filter(k => !keywords.find(kw => kw.keyword === k.keyword))];
 
     const extractBrand = (title: string): string | null => {
         const t = title.toLowerCase();
@@ -342,8 +432,8 @@ async function runChotot() {
         return null;
     };
 
-    console.log(`🚀 [Chotot] Processing ${keywords.length} keywords...`);
-    for (const kw of keywords) {
+    console.log(`🚀 [Chotot] Processing ${combinedKeywords.length} keywords...`);
+    for (const kw of combinedKeywords) {
         if (ids.size >= CONFIG.TARGET_PRODUCTS) break;
         // Chotot offset is index-based (0, 20, 40...), not page number. Limit is usually 20.
         // We simulate "pages" for the loop
