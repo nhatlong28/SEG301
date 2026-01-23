@@ -1,5 +1,19 @@
-import { supabaseAdmin } from '../db/supabase';
-import logger from '../utils/logger';
+
+import { Client } from 'pg';
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+
+let client: Client | null = null;
+
+async function getClient() {
+    if (!client) {
+        client = new Client({ connectionString: process.env.DATABASE_URL });
+        await client.connect();
+    }
+    return client;
+}
 
 export interface CrawlKeyword {
     id: number;
@@ -11,155 +25,59 @@ export interface CrawlKeyword {
     last_crawled_at: string | null;
 }
 
-/**
- * Service để quản lý keywords tập trung cho tất cả crawlers
- */
 export class KeywordService {
-    /**
-     * Get all active keywords for a specific source
-     * @param source - Source type or 'all' for all keywords
-     * @param category - Optional category filter
-     */
     static async getKeywords(
         source: string = 'all',
         category?: string,
-        freshnessHours?: number // If set, only returns keywords not crawled within this time
-    ): Promise<CrawlKeyword[]> {
-        try {
-            let query = (supabaseAdmin as any)
-                .from('crawl_keywords')
-                .select('*')
-                .eq('is_active', true)
-                .order('priority', { ascending: true })
-                .order('keyword', { ascending: true });
-
-            if (category) {
-                query = query.eq('category', category);
-            }
-
-            const { data, error } = await query;
-
-            if (error) {
-                logger.error('[KeywordService] Error fetching keywords:', error);
-                return [];
-            }
-
-            // Filter by source
-            let filtered = (data || []).filter((kw: CrawlKeyword) =>
-                source === 'all' || kw.applies_to.includes('all') || kw.applies_to.includes(source)
-            );
-
-            // Filter by freshness if requested
-            if (freshnessHours) {
-                const threshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000).getTime();
-                filtered = filtered.filter((kw: CrawlKeyword) => {
-                    if (!kw.last_crawled_at) return true; // Never crawled
-                    return new Date(kw.last_crawled_at).getTime() < threshold;
-                });
-            }
-
-            return filtered;
-        } catch (error) {
-            logger.error('[KeywordService] Failed to get keywords:', error);
-            return [];
-        }
-    }
-
-    /**
-     * Get keywords grouped by category
-     */
-    static async getKeywordsByCategory(source: string = 'all'): Promise<Record<string, CrawlKeyword[]>> {
-        const keywords = await this.getKeywords(source);
-        const grouped: Record<string, CrawlKeyword[]> = {};
-
-        for (const kw of keywords) {
-            const cat = kw.category || 'other';
-            if (!grouped[cat]) grouped[cat] = [];
-            grouped[cat].push(kw);
-        }
-
-        return grouped;
-    }
-
-    /**
-     * Get only keyword strings for crawling
-     */
-    static async getKeywordStrings(
-        source: string = 'all',
-        category?: string,
         freshnessHours?: number
-    ): Promise<string[]> {
-        const keywords = await this.getKeywords(source, category, freshnessHours);
-        return keywords.map(kw => kw.keyword);
-    }
+    ): Promise<CrawlKeyword[]> {
+        const db = await getClient();
+        let query = 'SELECT * FROM crawl_keywords WHERE is_active = true';
+        const params: any[] = [];
 
-    /**
-     * Mark keyword as crawled
-     */
-    static async markCrawled(keywordId: number): Promise<void> {
-        try {
-            await (supabaseAdmin as any)
-                .from('crawl_keywords')
-                .update({ last_crawled_at: new Date().toISOString() })
-                .eq('id', keywordId);
-        } catch (error) {
-            logger.error('[KeywordService] Failed to mark keyword as crawled:', error);
+        if (category) {
+            query += ' AND category = $1';
+            params.push(category);
         }
+
+        query += ' ORDER BY priority ASC, keyword ASC';
+
+        const { rows } = await db.query(query, params);
+
+        let filtered = rows.filter(kw =>
+            source === 'all' ||
+            (kw.applies_to && (kw.applies_to.includes('all') || kw.applies_to.includes(source)))
+        );
+
+        if (freshnessHours) {
+            const threshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000);
+            filtered = filtered.filter(kw => !kw.last_crawled_at || new Date(kw.last_crawled_at) < threshold);
+        }
+
+        return filtered;
     }
 
-    /**
-     * Add new keyword
-     */
+    static async markCrawled(keywordId: number): Promise<void> {
+        const db = await getClient();
+        await db.query('UPDATE crawl_keywords SET last_crawled_at = NOW() WHERE id = $1', [keywordId]);
+    }
+
     static async addKeyword(
         keyword: string,
         category: string,
         priority: number = 1,
         appliesTo: string[] = ['all']
     ): Promise<boolean> {
+        const db = await getClient();
         try {
-            const { error } = await (supabaseAdmin as any)
-                .from('crawl_keywords')
-                .insert({
-                    keyword,
-                    category,
-                    priority,
-                    applies_to: appliesTo,
-                    is_active: true
-                });
-
-            if (error) {
-                logger.error('[KeywordService] Failed to add keyword:', error);
-                return false;
-            }
+            await db.query(`
+                INSERT INTO crawl_keywords (keyword, category, priority, applies_to, is_active)
+                VALUES ($1, $2, $3, $4, true)
+                ON CONFLICT (keyword) DO NOTHING
+            `, [keyword, category, priority, appliesTo]);
             return true;
-        } catch (error) {
-            logger.error('[KeywordService] Failed to add keyword:', error);
+        } catch {
             return false;
         }
     }
-
-    /**
-     * Get statistics about keywords
-     */
-    static async getStats(): Promise<{ total: number; byCategory: Record<string, number> }> {
-        try {
-            const keywords = await this.getKeywords();
-            const byCategory: Record<string, number> = {};
-
-            for (const kw of keywords) {
-                const cat = kw.category || 'other';
-                byCategory[cat] = (byCategory[cat] || 0) + 1;
-            }
-
-            return {
-                total: keywords.length,
-                byCategory
-            };
-        } catch (error) {
-            logger.error('[KeywordService] Failed to get stats:', error);
-            return { total: 0, byCategory: {} };
-        }
-    }
 }
-
-export default KeywordService;

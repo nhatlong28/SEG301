@@ -387,63 +387,59 @@ export abstract class BaseCrawler {
                 const batch = uniqueProductData.slice(i, i + batchSize);
 
                 try {
-                    // FAST UPSERT: Let DB handle conflicts via ON CONFLICT
-                    // Use RETURNING to get which were NEW vs UPDATED
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const { data, error } = await (supabaseAdmin as any)
+                    // STEP 1: Check which external_ids already exist
+                    const externalIds = batch.map(p => p.external_id);
+                    const { data: existingRows } = await (supabaseAdmin as any)
+                        .from('raw_products')
+                        .select('external_id')
+                        .eq('source_id', this.sourceId)
+                        .in('external_id', externalIds);
+                    
+                    const existingSet = new Set((existingRows || []).map((r: any) => r.external_id));
+                    const newCount = batch.filter(p => !existingSet.has(p.external_id)).length;
+                    const updateCount = batch.length - newCount;
+
+                    // STEP 2: Upsert all
+                    const { error } = await (supabaseAdmin as any)
                         .from('raw_products')
                         .upsert(batch, {
                             onConflict: 'source_id, external_id',
                             ignoreDuplicates: false
-                        })
-                        .select('id, crawled_at, updated_at');
+                        });
 
                     if (error) {
-                        logger.warn(`[${this.sourceName}] Batch ${Math.floor(i / batchSize) + 1} failed, retrying with smaller chunks... Error:`, error.message);
-
+                        logger.warn(`[${this.sourceName}] Batch ${Math.floor(i / batchSize) + 1} failed: ${error.message}`);
                         // Fallback: Try one by one if batch failed
                         for (const item of batch) {
                             try {
-                                const { data: singleData } = await (supabaseAdmin as any)
+                                const { data: checkData } = await (supabaseAdmin as any)
                                     .from('raw_products')
-                                    .upsert(item, {
-                                        onConflict: 'source_id, external_id',
-                                        ignoreDuplicates: false
-                                    })
-                                    .select('id, crawled_at, updated_at');
-
-                                if (singleData) {
-                                    const row = singleData[0];
-                                    const created = new Date(row.crawled_at).getTime();
-                                    const updated = new Date(row.updated_at).getTime();
-                                    if (Math.abs(updated - created) < 2000) {
-                                        totalInserted++;
-                                    } else {
-                                        totalUpdated++;
-                                    }
-                                }
+                                    .select('id')
+                                    .eq('source_id', this.sourceId)
+                                    .eq('external_id', item.external_id)
+                                    .single();
+                                
+                                const isNew = !checkData;
+                                
+                                await (supabaseAdmin as any)
+                                    .from('raw_products')
+                                    .upsert(item, { onConflict: 'source_id, external_id' });
+                                
+                                if (isNew) totalInserted++;
+                                else totalUpdated++;
                             } catch (innerErr) {
-                                logger.error(`[${this.sourceName}] Failed to save single item ${item.external_id}:`, innerErr);
+                                logger.error(`[${this.sourceName}] Failed to save ${item.external_id}`);
                             }
                         }
-
                         continue;
                     }
 
-                    // Count new vs updated: if crawled_at ~= updated_at (within 1 second), it's new
-                    if (data) {
-                        for (const row of data) {
-                            const created = new Date(row.crawled_at).getTime();
-                            const updated = new Date(row.updated_at).getTime();
-                            if (Math.abs(updated - created) < 2000) {
-                                totalInserted++;
-                            } else {
-                                totalUpdated++;
-                            }
-                        }
-                    }
+                    totalInserted += newCount;
+                    totalUpdated += updateCount;
 
-                    logger.info(`[${this.sourceName}] Saved batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueProductData.length / batchSize)}`);
+                    if ((i / batchSize) % 10 === 0) {
+                        logger.info(`[${this.sourceName}] Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueProductData.length / batchSize)} - NEW: ${newCount}, UPD: ${updateCount}`);
+                    }
                     await this.sleep(100);
                 } catch (err) {
                     logger.error(`[${this.sourceName}] Batch ${Math.floor(i / batchSize) + 1} exception:`, err);

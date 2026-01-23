@@ -1,89 +1,51 @@
-
 import json
 import os
-import glob
-from pyvi import ViTokenizer
-import pandas as pd
-from tqdm import tqdm
-import re
+from pathlib import Path
 
-DATA_DIR = "../../data"
-OUTPUT_FILE = "../../data/cleaned_products.jsonl"
+def aggregate_shop_data(root_data_path="data", output_filename="total_products.jsonl"):
+    """
+    Scans all subdirectories in root_data_path for products.jsonl files
+    and aggregates them into a single total_products.jsonl file.
+    """
+    root_path = Path(root_data_path)
+    output_path = root_path / output_filename
+    
+    with open(output_path, 'w', encoding='utf-8') as outfile:
+        # Iterate through all subdirectories in the 'data' folder
+        for shop_dir in root_path.iterdir():
+            if shop_dir.is_dir():
+                jsonl_path = shop_dir / "products.jsonl"
+                
+                if jsonl_path.exists():
+                    print(f"--- Processing shop: {shop_dir.name} ---")
+                    with open(jsonl_path, 'r', encoding='utf-8') as infile:
+                        for line in infile:
+                            # Robustly remove unusual line terminators from the entire line
+                            clean_line = line.replace('\u2028', '').replace('\u2029', '').strip('\r\n')
+                            if clean_line:
+                                outfile.write(clean_line + '\n')
+    
+    print(f"Aggregation complete. Output saved to: {output_path}")
+    return str(output_path)
 
-def clean_text(text):
-    if not text:
-        return ""
-    # Remove HTML tags (simple regex)
-    text = re.sub(r'<[^>]+>', '', text)
-    # Remove scripts
-    text = re.sub(r'<script.*?</script>', '', text, flags=re.DOTALL)
-    # Remove extra spaces
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+def get_product_generator(data_path="data/total_products.jsonl"):
+    """
+    Efficiently yields product data line-by-line from the aggregated file.
+    """
+    if not os.path.exists(data_path):
+        return
 
-def segment_text(text):
-    if not text:
-        return ""
-    try:
-        return ViTokenizer.tokenize(text)
-    except:
-        return text
-
-def process_file(filepath):
-    products = []
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(data_path, 'r', encoding='utf-8') as f:
         for line in f:
+            # Chỉ nạp đúng 1 dòng này vào RAM
             try:
-                if not line.strip(): continue
-                product = json.loads(line)
+                product = json.loads(line) 
                 
-                # Cleaning
-                product['name_clean'] = clean_text(product.get('name', ''))
-                product['description_clean'] = clean_text(product.get('description', ''))
+                doc_id = str(product.get("external_id"))
+                name_normalized = product.get("name_normalized", "")
                 
-                # Segmentation
-                product['name_segmented'] = segment_text(product['name_clean'])
-                product['description_segmented'] = segment_text(product['description_clean'])
-                
-                products.append(product)
+                if name_normalized:
+                    tokens = name_normalized.split()
+                    yield doc_id, tokens
             except json.JSONDecodeError:
                 continue
-    return products
-
-def main():
-    print("Starting cleaning process...")
-    files = glob.glob(os.path.join(DATA_DIR, "*_products.jsonl"))
-    print(f"Found {len(files)} files: {files}")
-    
-    all_products = []
-    seen_ids = set()
-    
-    for f in files:
-        print(f"Processing {f}...")
-        file_products = process_file(f)
-        for p in file_products:
-            # Deduplication by source_id + external_id
-            # Or hash_name? 
-            # external_id is best if reliable.
-            # Assuming external_id is unique per source.
-            # Note: We don't have source name in record easily unless we parse filename or use logic.
-            # But the record has 'source_id' (which was 0 placeholder).
-            # Let's rely on 'external_url' or 'external_id'.
-            # Combining simple strategy: external_url is strongest unique key.
-            uid = p.get('external_url') or p.get('external_id')
-            if uid and uid not in seen_ids:
-                seen_ids.add(uid)
-                all_products.append(p)
-                
-    print(f"Total unique products: {len(all_products)}")
-    
-    # Save to JSONL
-    print(f"Saving to {OUTPUT_FILE}...")
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        for p in tqdm(all_products):
-            f.write(json.dumps(p, ensure_ascii=False) + '\n')
-            
-    print("Done!")
-
-if __name__ == "__main__":
-    main()

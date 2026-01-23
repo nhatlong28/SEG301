@@ -151,30 +151,45 @@ export class ThegioididongCrawler extends PuppeteerCrawlerBase {
             const $el = $(el);
             const $link = $el.find('a').first();
 
-            // Try to get data from attributes first (very reliable in TGDD API)
-            const attrName = $link.attr('data-name');
-            const attrPrice = parseInt($link.attr('data-price') || '0');
-            const attrBrand = $link.attr('data-brand');
-            const attrCate = $link.attr('data-cate');
-            const attrId = $link.attr('data-id') || $el.attr('data-id');
+            // 1. Extract Name & Price
+            const attrName = $link.attr('data-name') || $el.attr('data-name');
+            const attrPrice = parseInt($link.attr('data-price') || $el.attr('data-price') || '0');
+            const attrBrand = $link.attr('data-brand') || $el.attr('data-brand');
+            const attrCate = $link.attr('data-cate') || $el.attr('data-cate');
 
             const name = attrName || $el.find('h3, .name').text().trim();
             const price = attrPrice || parseInt($el.find('.price, strong').text().replace(/[^\d]/g, '')) || 0;
-            const id = attrId || $link.attr('href');
 
             // Skip if no name or price is 0
             if (!name || price <= 0) return;
 
+            // 2. Extract External ID (Numeric Priority)
+            let id = $el.attr('data-id') || $link.attr('data-id');
+            if (!id && $el.attr('id') && /^\d+$/.test($el.attr('id') || '')) {
+                id = $el.attr('id');
+            }
+            if (!id) id = $el.attr('data-product-id');
+
+            // 3. Extract URL
+            let externalUrl = $link.attr('href') || $el.attr('data-url') || '';
+            if (externalUrl && !externalUrl.startsWith('http')) {
+                externalUrl = this.baseUrl + externalUrl.replace(/^\//, '');
+            }
+
+            // Fallback to URL only if absolutely necessary (but prefer numeric)
+            if (!id) {
+                id = externalUrl;
+            }
+
             const imageUrl = $el.find('img').attr('src') || $el.find('img').attr('data-src') || '';
-            const externalUrl = $link.attr('href') || '';
 
             products.push({
-                externalId: id || name,
+                externalId: id,
                 name,
                 price,
                 available: true,
-                externalUrl: externalUrl.startsWith('http') ? externalUrl : this.baseUrl + externalUrl,
-                imageUrl: imageUrl,
+                externalUrl,
+                imageUrl,
                 brand: attrBrand || '',
                 category: attrCate || '',
             } as any);

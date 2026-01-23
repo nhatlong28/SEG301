@@ -1,0 +1,221 @@
+/* Import Inter font - MUST be first */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --color-primary: #1e3a8a;
+    --color-accent: #3b82f6;
+    --gradient-primary: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+    min-height: 100vh;
+    color: #1e293b;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar - hidden */
+::-webkit-scrollbar {
+    width: 0px;
+    height: 0px;
+    display: none;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Glassmorphism utilities */
+@layer components {
+    .glass-card {
+        @apply bg-white/80 backdrop-blur-xl border border-white/30 shadow-xl shadow-black/5;
+    }
+
+    .glass-card-dark {
+        @apply bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-xl;
+    }
+
+    .btn-primary {
+        @apply px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:from-blue-500 hover:to-blue-400 transform hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out;
+    }
+
+    .btn-secondary {
+        @apply px-6 py-3 bg-white text-blue-700 font-semibold rounded-xl border-2 border-blue-200 shadow-md hover:border-blue-400 hover:bg-blue-50 hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out;
+    }
+
+    .input-search {
+        @apply w-full px-6 py-4 text-lg bg-white border-2 border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200 placeholder:text-slate-400;
+    }
+
+    .badge {
+        @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide;
+    }
+
+    .badge-shopee {
+        @apply bg-gradient-to-r from-orange-500 to-red-500 text-white;
+    }
+
+    .badge-tiki {
+        @apply bg-gradient-to-r from-blue-500 to-blue-600 text-white;
+    }
+
+    .badge-lazada {
+        @apply bg-gradient-to-r from-purple-500 to-indigo-600 text-white;
+    }
+
+    .badge-cellphones {
+        @apply bg-gradient-to-r from-red-500 to-rose-600 text-white;
+    }
+
+    .badge-dienmayxanh {
+        @apply bg-gradient-to-r from-green-500 to-emerald-600 text-white;
+    }
+
+    .badge-thegioididong {
+        @apply bg-gradient-to-r from-yellow-500 to-amber-500 text-white;
+    }
+}
+
+/* Animations */
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 40px rgba(34, 197, 94, 0.5);
+    }
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-15px);
+    }
+}
+
+@keyframes gradient-shift {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-slide-up {
+    animation: slideUp 0.6s ease-out forwards;
+}
+
+.animate-float {
+    animation: float 4s ease-in-out infinite;
+}
+
+.animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 8s ease infinite;
+}
+
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.best-price-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Hover effects */
+.card-hover {
+    @apply transition-all duration-300 ease-out;
+}
+
+.card-hover:hover {
+    @apply -translate-y-2 shadow-2xl;
+}
+
+/* Grid patterns */
+.grid-pattern {
+    background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.15) 1px, transparent 0);
+    background-size: 32px 32px;
+}
+
+/* Gradient text */
+.gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-purple-500 to-pink-500;
+}

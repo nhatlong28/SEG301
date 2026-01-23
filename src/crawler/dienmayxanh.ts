@@ -151,30 +151,59 @@ export class DienmayxanhCrawler extends PuppeteerCrawlerBase {
             const $el = $(el);
             const $link = $el.find('a').first();
 
-            // Try to get data from attributes first
-            const attrName = $link.attr('data-name');
-            const attrPrice = parseInt($link.attr('data-price') || '0');
-            const attrBrand = $link.attr('data-brand');
-            const attrCate = $link.attr('data-cate');
-            const attrId = $link.attr('data-id') || $el.attr('data-id');
+            // 1. Extract Name & Price
+            // Try attributes first, then text fallback
+            const attrName = $link.attr('data-name') || $el.attr('data-name');
+            const attrPrice = parseInt($link.attr('data-price') || $el.attr('data-price') || '0');
+            const attrBrand = $link.attr('data-brand') || $el.attr('data-brand');
+            const attrCate = $link.attr('data-cate') || $el.attr('data-cate');
 
             const name = attrName || $el.find('h3, .name').text().trim();
             const price = attrPrice || parseInt($el.find('.price, strong').text().replace(/[^\d]/g, '')) || 0;
-            const id = attrId || $link.attr('href');
 
             // Skip if no name or price is 0
             if (!name || price <= 0) return;
 
+            // 2. Extract External ID (Numeric Priority)
+            // Strategy: Look for data-id on Container OR Link.
+            // Also check 'id' attribute if it looks numeric.
+            let id = $el.attr('data-id') || $link.attr('data-id');
+            if (!id && $el.attr('id') && /^\d+$/.test($el.attr('id') || '')) {
+                id = $el.attr('id');
+            }
+
+            // Fallback: Check for data-product-id (sometimes used)
+            if (!id) id = $el.attr('data-product-id');
+
+            // 3. Extract URL
+            let externalUrl = $link.attr('href') || $el.attr('data-url') || '';
+            if (externalUrl && !externalUrl.startsWith('http')) {
+                externalUrl = this.baseUrl + externalUrl.replace(/^\//, ''); // Ensure single slash
+            }
+
+            // CRITICAL: If ID is still missing or not numeric, we have a problem.
+            // But for now, if we found a valid product (name+price), we might have to accept a non-standard ID
+            // or try to extract from URL if possible (though TGDD URLs are slugs).
+            // However, User Request is specifically complaining about URL-based IDs.
+            // Examples show TGDD/DMX usually have data-id.
+            if (!id) {
+                // Last ditch: check class name for pattern like __cate_12345 (cat id) or product-123 (prod id)
+                // But usually missing data-id means it's a weird variant item.
+                // If externalUrl exists, use it as fallback but log warning
+                // logger.warn(`[DienmayXanh] Missing numeric ID for ${name}. HTML: ${$el.html()?.substring(0, 50)}`);
+                // For now, keep the fallback to URL to avoid losing data, but prefer numeric.
+                id = externalUrl;
+            }
+
             const imageUrl = $el.find('img').attr('src') || $el.find('img').attr('data-src') || '';
-            const externalUrl = $link.attr('href') || '';
 
             products.push({
-                externalId: id || name,
+                externalId: id, // Prioritize numeric data-id
                 name,
                 price,
                 available: true,
-                externalUrl: externalUrl.startsWith('http') ? externalUrl : this.baseUrl + externalUrl,
-                imageUrl: imageUrl,
+                externalUrl,
+                imageUrl,
                 brand: attrBrand || '',
                 category: attrCate || '',
             } as any);
