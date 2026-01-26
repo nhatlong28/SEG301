@@ -5,7 +5,7 @@ import pickle
 import os
 # sys.path.append(os.path.join(os.path.dirname(__file__), 'src')) (Not needed if running from root with proper structure but kept for safety)
 
-from src.crawler.parser import aggregate_shop_data, get_product_generator
+from src.crawler.parser import get_product_generator
 from src.indexer.spimi import SPIMIIndexer
 from src.indexer.merging import merge_blocks
 from src.indexer.reader import IndexReader
@@ -16,8 +16,8 @@ def build_index():
     start_time = time.time()
     
     # 1. Generator
-    data_path = aggregate_shop_data("data", "total_products.jsonl")
-    product_gen = get_product_generator(data_path)
+    # Reading from Database via parser (DATABASE_URL in .env)
+    product_gen = get_product_generator()
     if not product_gen:
         print("Failed to initialize data generator.")
         return

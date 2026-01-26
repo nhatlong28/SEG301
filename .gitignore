@@ -1,6 +1,6 @@
 lazada_cookie.txt
 lazada_ua.txt
-/data
+data/
 *.log
 node_modules/
 dist/

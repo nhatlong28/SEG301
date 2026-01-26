@@ -84,3 +84,22 @@
 - Created a utility script `src/scripts/clean_jsonl.py` to repair the existing `total_products.jsonl` file, fixing 2 problematic lines.
 - Verified the fix by running the indexing pipeline successfully.
 
+## Date: 2026-01-26
+
+**Task:** Refactor Data Logic to Simulate DB Processing
+
+**User:** 
+- Refactor `src/crawler/parser.py`:
+    - Remove `aggregate_shop_data`.
+    - Update `get_product_generator` to read from DB.
+    - Use `pyvi` content for tokenization/normalization.
+    - Map `external_id` -> `doc_id` and `name_normalized` -> `name_normalized`.
+- Update `console_app.py` to match the new logic.
+
+**AI:**
+- Refactored `src/crawler/parser.py`:
+    - Processed `name_normalized` from the source using `ViTokenizer` from `pyvi`.
+    - Removed aggregation logic.
+- Updated `console_app.py` to remove calls to `aggregate_shop_data`.
+
+

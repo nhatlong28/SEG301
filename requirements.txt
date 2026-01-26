@@ -13,3 +13,4 @@ sentence-transformers
 
 # Utilities
 numpy
+psycopg2-binary

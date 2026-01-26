@@ -1,51 +1,49 @@
-import json
 import os
-from pathlib import Path
+import psycopg2
+from pyvi import ViTokenizer
+from dotenv import load_dotenv
 
-def aggregate_shop_data(root_data_path="data", output_filename="total_products.jsonl"):
-    """
-    Scans all subdirectories in root_data_path for products.jsonl files
-    and aggregates them into a single total_products.jsonl file.
-    """
-    root_path = Path(root_data_path)
-    output_path = root_path / output_filename
-    
-    with open(output_path, 'w', encoding='utf-8') as outfile:
-        # Iterate through all subdirectories in the 'data' folder
-        for shop_dir in root_path.iterdir():
-            if shop_dir.is_dir():
-                jsonl_path = shop_dir / "products.jsonl"
-                
-                if jsonl_path.exists():
-                    print(f"--- Processing shop: {shop_dir.name} ---")
-                    with open(jsonl_path, 'r', encoding='utf-8') as infile:
-                        for line in infile:
-                            # Robustly remove unusual line terminators from the entire line
-                            clean_line = line.replace('\u2028', '').replace('\u2029', '').strip('\r\n')
-                            if clean_line:
-                                outfile.write(clean_line + '\n')
-    
-    print(f"Aggregation complete. Output saved to: {output_path}")
-    return str(output_path)
+load_dotenv()
 
-def get_product_generator(data_path="data/total_products.jsonl"):
+def get_product_generator():
     """
-    Efficiently yields product data line-by-line from the aggregated file.
+    Yields product data line-by-line from the Postgres/CockroachDB database.
+    Queries 'external_id' and 'name_normalized' from 'raw_products'.
+    Normalize 'name_normalized' using Pyvi.
     """
-    if not os.path.exists(data_path):
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        print("Error: DATABASE_URL not found in environment variables.")
         return
 
-    with open(data_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            # Chỉ nạp đúng 1 dòng này vào RAM
-            try:
-                product = json.loads(line) 
-                
-                doc_id = str(product.get("external_id"))
-                name_normalized = product.get("name_normalized", "")
-                
-                if name_normalized:
-                    tokens = name_normalized.split()
-                    yield doc_id, tokens
-            except json.JSONDecodeError:
-                continue
+    conn = None
+    try:
+        conn = psycopg2.connect(db_url)
+        
+        # Use server-side cursor (named cursor) to stream results
+        # 'product_cursor' is the name of the cursor on the server
+        with conn.cursor(name='product_cursor') as cursor:
+            cursor.execute("SELECT external_id, name_normalized FROM raw_products")
+            
+            while True:
+                # Fetch small batches to keep RAM usage low
+                rows = cursor.fetchmany(size=1000)
+                if not rows:
+                    break
+                    
+                for row in rows:
+                    doc_id = str(row[0])
+                    name_normalized = row[1]
+                    
+                    if name_normalized:
+                        # ViTokenizer.tokenize sẽ nối từ ghép bằng gạch dưới
+                        text_processed = ViTokenizer.tokenize(name_normalized)
+                        tokens = text_processed.split()
+                        
+                        yield doc_id, tokens
+                        
+    except Exception as e:
+        print(f"Database error: {e}")
+    finally:
+        if conn:
+            conn.close()
