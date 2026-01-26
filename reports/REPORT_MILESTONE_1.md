@@ -37,9 +37,8 @@ graph TD
     G -->|4. Database| I[PostgreSQL/CockroachDB Bulk Upsert]
     
     H & I --> J[Python NLP Pipeline]
-    J --> K["Word Segmentation / Underthesea & PyVi"]
-    L --> K
-    L[FINAL Clean Dataset - 1,009,867 Docs]
+    J --> K["Word Segmentation/PyVi"]
+    K --> L[FINAL Clean Dataset - 1,009,867 Docs]
 ```
 
 ---
