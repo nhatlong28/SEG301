@@ -61,3 +61,4 @@ SEG301-Project/
 
 ## Data Sample
 Sample data is available in `data_sample/`. The full dataset (1M+ documents) is stored in the production CockroachDB cluster.
+## Data: https://drive.google.com/drive/folders/1RmbsW8ud0SJlAS5bPZMCjE29aVc6AOsC?usp=sharing
