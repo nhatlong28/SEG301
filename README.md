@@ -2,29 +2,46 @@
 
 ## Group Information
 - **Course**: SEG301 - Search Engines & Information Retrieval
-- **Project**: Vertical Search Engine for E-commerce (Tiki, Lazada, Shopee, etc.)
-- **Goal**: 1,000,000 Documents
+- **Project**: Vertical Search Engine for E-commerce (Tiki, Lazada, Shopee, Chotot, etc.)
+- **Goal**: 1,000,000 Documents (Status: **Achieved & Exceeded**)
+
+## Data Statistics (Milestone 1)
+As of the latest verification, the system has successfully collected and processed **1,009,867** clean documents.
+
+| Source Platform | Document Count | Status |
+| :--- | :--- | :--- |
+| **Tiki** | 395,852 | Normalized |
+| **Chotot** | 388,845 | Normalized |
+| **Lazada** | 172,503 | Normalized |
+| **CellphoneS** | 41,914 | Normalized |
+| **Điện Máy Xanh** | 6,629 | Normalized |
+| **Thegioididong** | 4,124 | Normalized |
+| **TOTAL** | **1,009,867** | **100% Target Met** |
 
 ## Architecture
-This project uses a hybrid architecture for maximum performance:
-- **Crawler (Milestone 1)**: TypeScript/Node.js (Puppeteer & Axios) for high-performance async crawling. Wrapped in Python for specification compliance.
-- **Processing (Milestone 1)**: Python (`src/crawler/parser.py`) for Cleaning, Word Segmentation (PyVi), and Deduplication.
-- **Indexing & Ranking (Milestone 2)**: Python (`src/indexer/spimi.py`, `src/ranking/bm25.py`).
-- **Web App (Milestone 3)**: Python (Streamlit/Flask) or Next.js.
+This project uses a hybrid architecture designed for big data scalability:
+- **Crawler (Milestone 1)**: 
+    - **Engine**: TypeScript/Node.js with Puppeteer & Axios.
+    - **Performance**: Multi-threaded concurrency with `p-queue` and Browser Pooling.
+    - **Stealth**: Automated fingerprint rotation and hybrid execution to bypass bot detection (Lazada, Tiki).
+- **Processing (Milestone 1)**: Python (`src/crawler/parser.py`) for Cleaning, Word Segmentation (Underthesea/PyVi), and Deduplication.
+- **Persistence**: Hybrid storage using JSONL for raw data and **CockroachDB/Supabase** for structured search metadata.
+- **Indexing & Ranking (Milestone 2)**: Python (`src/indexer/spimi.py`, `src/ranking/bm25.py`). SPIMI implementation for memory-efficient indexing of 1M+ docs.
+- **Web App (Milestone 3)**: Next.js frontend with Python/Flask or FastAPI backend.
 
 ## Directory Structure
 ```
 SEG301-Project/
-├── ai_log.md                # AI Interaction Log (IMPORTANT)
-├── data/                    # Crawled data (JSONL)
+├── ai_log_long.md           # AI Interaction Logs (Team members)
+├── ai_log_chien.md
+├── ai_log_hau.md
+├── data/                    # Crawled data (JSONL/Parquet)
 ├── src/
-│   ├── crawler/
-│   │   ├── spider.py        # Entry point (Wraps TS crawler)
-│   │   ├── parser.py        # Data cleaning & Segmentation
-│   │   └── ... (TS implementation files)
+│   ├── crawler/             # Multi-source scrapers (TS/Python)
 │   ├── indexer/             # SPIMI implementation
-│   ├── ranking/             # BM25 implementation
-│   └── ui/                  # Web Interface
+│   ├── ranking/             # BM25 & Vector Search logic
+│   └── ui/                  # Web Interface (Streamlit/Next.js)
+├── reports/                 # Milestone documentation
 ```
 
 ## Setup & Run
@@ -34,19 +51,13 @@ SEG301-Project/
    pip install -r requirements.txt
    ```
 
-2. **Run Crawler (Milestone 1)**:
+2. **Run Crawler**:
    ```bash
-   python src/crawler/spider.py
-   # OR directly:
-   # npx tsx src/scripts/crawl_to_json.ts
+   # Multi-source orchestration
+   npx tsx src\scripts\crawl_exhaustive.ts
    ```
 
-3. **Clean Data**:
-   ```bash
-   python src/crawler/parser.py
-   ```
-   Output: `data/cleaned_products.jsonl`
+
 
 ## Data Sample
-Sample data is available in `data_sample/`. Full dataset is stored locally/cloud.
-
+Sample data is available in `data_sample/`. The full dataset (1M+ documents) is stored in the production CockroachDB cluster.
