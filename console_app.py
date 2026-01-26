@@ -3,6 +3,11 @@ import argparse
 import time
 import pickle
 import os
+from pyvi import ViTokenizer
+import warnings
+
+# Suppress VisibleDeprecationWarning from pyvi/numpy incompatibility
+warnings.filterwarnings("ignore", category=VisibleDeprecationWarning) if 'VisibleDeprecationWarning' in globals() else warnings.filterwarnings("ignore")
 # sys.path.append(os.path.join(os.path.dirname(__file__), 'src')) (Not needed if running from root with proper structure but kept for safety)
 
 from src.crawler.parser import get_product_generator
@@ -78,8 +83,8 @@ def search_loop():
         
         # 1. Preprocessing
         # Simple whitespace tokenize + lowercase to match parser logic
-        query_tokens = query.lower().split()
-        
+        #query_tokens = query.lower().split()
+        query_tokens = ViTokenizer.tokenize(query).split()
         # 2. Get Postings
         candidate_postings = {}
         for token in query_tokens:
