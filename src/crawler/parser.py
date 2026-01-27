@@ -23,7 +23,7 @@ def get_product_generator():
         # Use server-side cursor (named cursor) to stream results
         # 'product_cursor' is the name of the cursor on the server
         with conn.cursor(name='product_cursor') as cursor:
-            cursor.execute("SELECT external_id, name_normalized FROM raw_products")
+            cursor.execute("SELECT id, name_normalized FROM raw_products")
             
             while True:
                 # Fetch small batches to keep RAM usage low
@@ -37,10 +37,8 @@ def get_product_generator():
                     
                     if name_normalized:
                         # ViTokenizer.tokenize sẽ nối từ ghép bằng gạch dưới
-                        text_processed = ViTokenizer.tokenize(name_normalized)
-                        tokens = text_processed.split()
-                        
-                        yield doc_id, tokens
+                        tokenized_name = ViTokenizer.tokenize(name_normalized).split()
+                        yield doc_id, tokenized_name
                         
     except Exception as e:
         print(f"Database error: {e}")

@@ -102,4 +102,15 @@
     - Removed aggregation logic.
 - Updated `console_app.py` to remove calls to `aggregate_shop_data`.
 
+## Date: 2026-01-27
+
+**Task:** Finalize Database Integration and Investigation
+
+**User:**
+- Update `parser.py` to use `id` as `doc_id`.
+- Refactor `console_app.py` search loop to fetch details from DB.
+
+**AI:**
+- Updated SQL query in `src/crawler/parser.py` to use the primary key `id`.
+- Refactored `console_app.py` to perform batch detail fetching using PostgreSQL `id = ANY(%s)`, removing the need for local data files.
 

@@ -1,14 +1,13 @@
-import json
 import argparse
 import time
 import pickle
 import os
+import psycopg2
 from pyvi import ViTokenizer
-import warnings
+from dotenv import load_dotenv
 
-# Suppress VisibleDeprecationWarning from pyvi/numpy incompatibility
-warnings.filterwarnings("ignore", category=VisibleDeprecationWarning) if 'VisibleDeprecationWarning' in globals() else warnings.filterwarnings("ignore")
-# sys.path.append(os.path.join(os.path.dirname(__file__), 'src')) (Not needed if running from root with proper structure but kept for safety)
+# Load environment variables
+load_dotenv()
 
 from src.crawler.parser import get_product_generator
 from src.indexer.spimi import SPIMIIndexer
@@ -53,23 +52,16 @@ def search_loop():
     N = metadata['N']
     avgdl = metadata['avgdl']
     doc_lengths = metadata['doc_lengths']
-    
+
     # Initialize Reader and Ranker
     reader = IndexReader(index_file="src/indexer/final_index.bin", lexicon_file="src/indexer/lexicon.dat")
     ranker = BM25Ranker(doc_lengths=doc_lengths, avgdl=avgdl, N=N)
     
-    # Load aggregated raw data for detailed display
-    data_path = os.path.join("data", "total_products.jsonl")
-    product_details = {}
-    if os.path.exists(data_path):
-        with open(data_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                try:
-                    p = json.loads(line)
-                    product_details[str(p.get('external_id'))] = p
-                except json.JSONDecodeError:
-                    continue
-    
+    # DB connection for details
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        print("DATABASE_URL not found. Result details might be limited.")
+
     print("Search Engine Ready!")
     
     while True:
@@ -84,7 +76,7 @@ def search_loop():
         # 1. Preprocessing
         # Simple whitespace tokenize + lowercase to match parser logic
         #query_tokens = query.lower().split()
-        query_tokens = ViTokenizer.tokenize(query).split()
+        query_tokens = ViTokenizer.tokenize(query.lower()).split()
         # 2. Get Postings
         candidate_postings = {}
         for token in query_tokens:
@@ -100,20 +92,39 @@ def search_loop():
         # returns list of (doc_id, score)
         top_results = ranker.rank(query_tokens, candidate_postings, top_k=10)
         
-        search_time = time.time() - start_search
-        print(f"Found {len(top_results)} results in {search_time:.4f}s")
+        # search_time = time.time() - start_search
+        # print(f"Found {len(top_results)} results in {search_time:.4f}s")
         
-        # 4. Fetch Details & Display
+        # 4. Fetch Details from DB & Display
         if not top_results:
              print("No relevant results after ranking.")
         else:
             print("\nTop 10 Results:")
+            
+            # Fetch details in one go for efficiency
+            doc_ids = [res[0] for res in top_results]
+            details_map = {}
+            
+            if db_url:
+                try:
+                    conn = psycopg2.connect(db_url)
+                    with conn.cursor() as cur:
+                        # Use ANY(%s) to fetch all docs at once
+                        cur.execute("SELECT id, name, price FROM raw_products WHERE id = ANY(%s)", (doc_ids,))
+                        for row in cur.fetchall():
+                            details_map[str(row[0])] = {"name": row[1], "price": row[2]}
+                    conn.close()
+                except Exception as e:
+                    print(f"Error fetching details: {e}")
+
             for rank, (doc_id, score) in enumerate(top_results, 1):
-                product = product_details.get(doc_id, {})
-                name = product.get("name", "Unknown")
+                product = details_map.get(str(doc_id), {})
+                name = product.get("name", "Unknown (DB lookup failed)")
                 price = product.get("price", "N/A")
                 
-                print(f"{rank}. [{doc_id}] {name} - Price: {price} (Score: {score:.4f})")
+                print(f"{rank}. [ID: {doc_id}] {name} - Price: {price} (Score: {score:.4f})")
+        search_time = time.time() - start_search
+        print(f"Found {len(top_results)} results in {search_time:.4f}s")
 
 def main():
     parser = argparse.ArgumentParser(description="Search Engine")
