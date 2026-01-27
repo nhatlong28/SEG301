@@ -48,6 +48,7 @@ class SPIMIIndexer:
         metadata = {
             'N': self.doc_count,
             'avgdl': avgdl,
+            'total_length': self.total_length,
             'doc_lengths': self.doc_lengths
         }
         meta_path = os.path.join(self.output_dir, "metadata.pkl")

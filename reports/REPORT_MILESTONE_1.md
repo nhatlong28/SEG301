@@ -10,7 +10,7 @@
 The system is designed with a **Scalable Big Data Ingestion** mindset. Instead of discrete data scraping scripts, we built a comprehensive **Crawler Framework** capable of Orchestration, Resource Management, and Auto-recovery.
 
 ### Challenges and Solutions:
-- **Big Data:** Processing ~1,000,000 records. *Solution:* Using `p-queue` to control concurrency and Bulk Upsert into CockroachDB/Supabase to optimize I/O.
+- **Big Data:** Processing ~1,000,000 records. *Solution:* Using `p-queue` to control concurrency and Bulk Upsert into CockroachDB to optimize I/O.
 - **Bot Detection:** Platforms (Lazada, Tiki, Chotot) have very strict blocking mechanisms. *Solution:* Browser Fingerprinting, UA Rotation, and Hybrid Fetching (executing code directly within the browser context).
 
 ---
@@ -38,7 +38,7 @@ graph TD
     
     H & I --> J[Python NLP Pipeline]
     J --> K["Word Segmentation/PyVi"]
-    K --> L[FINAL Clean Dataset - 1,009,867 Docs]
+    K --> L[FINAL Clean Dataset - 1,009,851 Docs]
 ```
 
 ---
@@ -79,7 +79,7 @@ Each document in the 1,000,000 dataset adheres to a strict schema:
 ### 4.2. Vietnamese Word Segmentation
 Raw data is processed through a Python pipeline:
 1. **Normalizing:** Fixes Vietnamese font errors (Unicode composite vs precomposed).
-2. **Tokenizing:** Uses `PyVi` to extract meaningful phrases (e.g., "máy tính bảng" instead of "máy", "tính", "bảng").
+2. **Tokenizing:** Uses `PyVi` to extract meaningful phrases (e.g., "tai nghe" instead of "tai", "nghe").
 
 ---
 
@@ -87,20 +87,19 @@ Raw data is processed through a Python pipeline:
 
 The system has reached the target threshold for Milestone 1:
 
-| Source | Record Count (Docs) | Status |
+| Source Platform | Document Count | Status |
 | :--- | :--- | :--- |
-| **Tiki** | 395,852 | Clean |
-| **Chotot** | 388,845 | Clean |
-| **Lazada** | 172,503 | Clean |
-| **CellphoneS** | 41,914 | Clean |
-| **MWG (DMX/TGDD)** | 10,753 | Clean |
-| **TOTAL** | **1,009,867** | **~101% of target met** |
+| **Tiki** | 395,852 | Normalized |
+| **Chotot** | 388,838 | Normalized |
+| **Lazada** | 172,494 | Normalized |
+| **CellphoneS** | 41,914 | Normalized |
+| **Điện Máy Xanh** | 6,629 | Normalized |
+| **Thegioididong** | 4,124 | Normalized |
+| **TOTAL** | **1,009,851** | **100% Target Met** |
 
 ### Insights:
-- **Average Length:** 16.5 words per product name.
-- **Diversity:** Covers 104 different product categories.
-- **Quality:** 98.2% of records include full images and actual prices (not temporary/contact-for-price).
-
+- **Average Length:** 11.01 words per product name.
+- **Total Length:** 11,119,653 words. 
 ---
 
 ## 6. KEY CODE EXPLANATION (CODE EXPLANATION)

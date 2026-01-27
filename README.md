@@ -6,17 +6,17 @@
 - **Goal**: 1,000,000 Documents (Status: **Achieved & Exceeded**)
 
 ## Data Statistics (Milestone 1)
-As of the latest verification, the system has successfully collected and processed **1,009,867** clean documents.
+As of the latest verification, the system has successfully collected and processed **1,009,851** clean documents.
 
 | Source Platform | Document Count | Status |
 | :--- | :--- | :--- |
 | **Tiki** | 395,852 | Normalized |
-| **Chotot** | 388,845 | Normalized |
-| **Lazada** | 172,503 | Normalized |
+| **Chotot** | 388,838 | Normalized |
+| **Lazada** | 172,494 | Normalized |
 | **CellphoneS** | 41,914 | Normalized |
 | **Điện Máy Xanh** | 6,629 | Normalized |
 | **Thegioididong** | 4,124 | Normalized |
-| **TOTAL** | **1,009,867** | **100% Target Met** |
+| **TOTAL** | **1,009,851** | **100% Target Met** |
 
 ## Architecture
 This project uses a hybrid architecture designed for big data scalability:
@@ -24,8 +24,8 @@ This project uses a hybrid architecture designed for big data scalability:
     - **Engine**: TypeScript/Node.js with Puppeteer & Axios.
     - **Performance**: Multi-threaded concurrency with `p-queue` and Browser Pooling.
     - **Stealth**: Automated fingerprint rotation and hybrid execution to bypass bot detection (Lazada, Tiki).
-- **Processing (Milestone 1)**: Python (`src/crawler/parser.py`) for Cleaning, Word Segmentation (Underthesea/PyVi), and Deduplication.
-- **Persistence**: Hybrid storage using JSONL for raw data and **CockroachDB/Supabase** for structured search metadata.
+- **Processing (Milestone 1)**: Python (`src/crawler/parser.py`) for Cleaning, Word Segmentation (PyVi), and Deduplication.
+- **Persistence**: Hybrid storage using JSONL for raw data and **CockroachDB** for structured search metadata.
 - **Indexing & Ranking (Milestone 2)**: Python (`src/indexer/spimi.py`, `src/ranking/bm25.py`). SPIMI implementation for memory-efficient indexing of 1M+ docs.
 - **Web App (Milestone 3)**: Next.js frontend with Python/Flask or FastAPI backend.
 
@@ -35,7 +35,7 @@ SEG301-Project/
 ├── ai_log_long.md           # AI Interaction Logs (Team members)
 ├── ai_log_chien.md
 ├── ai_log_hau.md
-├── data/                    # Crawled data (JSONL/Parquet)
+├── data_sample/             # Sample data (JSONL)
 ├── src/
 │   ├── crawler/             # Multi-source scrapers (TS/Python)
 │   ├── indexer/             # SPIMI implementation
@@ -59,6 +59,5 @@ SEG301-Project/
 
 
 
-## Data Sample
-Sample data is available in `data_sample/`. The full dataset (1M+ documents) is stored in the production CockroachDB cluster.
-## Data: https://drive.google.com/drive/folders/1RmbsW8ud0SJlAS5bPZMCjE29aVc6AOsC?usp=sharing
+## Dataset
+The full dataset (1M+ documents) is stored in the production CockroachDB cluster or can be viewed in the [Google Drive](https://drive.google.com/drive/folders/1RmbsW8ud0SJlAS5bPZMCjE29aVc6AOsC?usp=sharing).
