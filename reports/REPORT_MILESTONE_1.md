@@ -34,9 +34,9 @@ graph TD
     E -->|1. Validation| F[Schema Check & Cleaning]
     F -->|2. Deduplication| G[Hash-based Name Matching]
     G -->|3. Storage| H[JSONL Local Storage]
-    G -->|4. Database| I[PostgreSQL/CockroachDB Bulk Upsert]
+    G -->|4. Database| I[CockroachDB Bulk Upsert]
     
-    H & I --> J[Python NLP Pipeline]
+    I --> J[Python NLP Pipeline]
     J --> K["Word Segmentation/PyVi"]
     K --> L[FINAL Clean Dataset - 1,009,851 Docs]
 ```
@@ -98,8 +98,8 @@ The system has reached the target threshold for Milestone 1:
 | **TOTAL** | **1,009,851** | **100% Target Met** |
 
 ### Insights:
-- **Average Length:** 11.01 words per product name.
-- **Total Length:** 11,119,653 words. 
+- **Average Length:** 11.01 tokens per product name.
+- **Total Length:** 11,119,653 tokens.
 ---
 
 ## 6. KEY CODE EXPLANATION (CODE EXPLANATION)
