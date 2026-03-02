@@ -6,17 +6,17 @@
 - **Goal**: 1,000,000 Documents (Status: **Achieved & Exceeded**)
 
 ## Data Statistics (Milestone 1)
-As of the latest verification, the system has successfully collected and processed **1,009,851** clean documents.
+As of the latest verification (2026-03-02), the system has successfully collected and processed **1,006,666** clean documents (193 records excluded post-cleaning due to missing `name_normalized`).
 
 | Source Platform | Document Count | Status |
 | :--- | :--- | :--- |
-| **Tiki** | 395,852 | Normalized |
-| **Chotot** | 388,838 | Normalized |
-| **Lazada** | 172,494 | Normalized |
-| **CellphoneS** | 41,914 | Normalized |
-| **Điện Máy Xanh** | 6,629 | Normalized |
-| **Thegioididong** | 4,124 | Normalized |
-| **TOTAL** | **1,009,851** | **100% Target Met** |
+| **Tiki** | 389,306 | Normalized |
+| **Chotot** | 387,818 | Normalized |
+| **Lazada** | 177,256 | Normalized |
+| **CellphoneS** | 42,249 | Normalized |
+| **Điện Máy Xanh** | 6,145 | Normalized |
+| **Thegioididong** | 3,892 | Normalized |
+| **TOTAL** | **1,006,666** | **100% Target Met** |
 
 ## Architecture
 This project uses a hybrid architecture designed for big data scalability:
@@ -27,7 +27,7 @@ This project uses a hybrid architecture designed for big data scalability:
 - **Processing (Milestone 1)**: Python (`src/crawler/parser.py`) for Cleaning, Word Segmentation (PyVi), and Deduplication.
 - **Persistence**: Hybrid storage using JSONL for raw data and **CockroachDB** for structured search metadata.
 - **Indexing & Ranking (Milestone 2)**: Python (`src/indexer/spimi.py`, `src/ranking/bm25.py`). SPIMI implementation for memory-efficient indexing of 1M+ docs.
-- **Web App (Milestone 3)**: Next.js frontend with Python/Flask or FastAPI backend.
+- **Web App (Milestone 3)**: Next.js frontend with FastAPI backend.
 
 ## Directory Structure
 ```
@@ -37,10 +37,10 @@ SEG301-Project/
 ├── ai_log_hau.md
 ├── data_sample/             # Sample data (JSONL)
 ├── src/
-│   ├── crawler/             # Multi-source scrapers (TS/Python)
+│   ├── crawler/             # Multi-source scrapers
 │   ├── indexer/             # SPIMI implementation
 │   ├── ranking/             # BM25 & Vector Search logic
-│   └── ui/                  # Web Interface (Streamlit/Next.js)
+│   └── ui/                  # Web Interface
 ├── reports/                 # Milestone documentation
 ```
 

@@ -38,7 +38,7 @@ graph TD
     
     I --> J[Python NLP Pipeline]
     J --> K["Word Segmentation/PyVi"]
-    K --> L[FINAL Clean Dataset - 1,009,851 Docs]
+    K ---> L[FINAL Clean Dataset - 1,006,666 Docs]
 ```
 
 ---
@@ -85,21 +85,21 @@ Raw data is processed through a Python pipeline:
 
 ## 5. STATISTICS & DATA QUALITY (INSIGHTS)
 
-The system has reached the target threshold for Milestone 1:
+The system has reached the target threshold for Milestone 1 (verified 2026-03-02):
 
 | Source Platform | Document Count | Status |
 | :--- | :--- | :--- |
-| **Tiki** | 395,852 | Normalized |
-| **Chotot** | 388,838 | Normalized |
-| **Lazada** | 172,494 | Normalized |
-| **CellphoneS** | 41,914 | Normalized |
-| **Điện Máy Xanh** | 6,629 | Normalized |
-| **Thegioididong** | 4,124 | Normalized |
-| **TOTAL** | **1,009,851** | **100% Target Met** |
+| **Tiki** | 389,306 | Normalized |
+| **Chotot** | 387,818 | Normalized |
+| **Lazada** | 177,256 | Normalized |
+| **CellphoneS** | 42,249 | Normalized |
+| **Điện Máy Xanh** | 6,145 | Normalized |
+| **Thegioididong** | 3,892 | Normalized |
+| **TOTAL** | **1,006,666** | **100% Target Met** |
 
 ### Insights:
-- **Average Length:** 11.01 tokens per product name.
-- **Total Length:** 11,119,653 tokens.
+- **Average Length:** 10.96 tokens per product name.
+- **Total Length:** 11,033,059 tokens.
 ---
 
 ## 6. KEY CODE EXPLANATION (CODE EXPLANATION)
