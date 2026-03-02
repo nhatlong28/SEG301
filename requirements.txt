@@ -6,10 +6,10 @@ python-dotenv
 
 # Vietnamese NLP
 pyvi
-underthesea
 
 # Vector Search
 sentence-transformers
+qdrant-client
 
 # Utilities
 numpy

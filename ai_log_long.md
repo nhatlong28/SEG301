@@ -114,3 +114,55 @@
 - Updated SQL query in `src/crawler/parser.py` to use the primary key `id`.
 - Refactored `console_app.py` to perform batch detail fetching using PostgreSQL `id = ANY(%s)`, removing the need for local data files.
 
+## Date: 2026-02-01
+
+**Task:** Vector Search & API Integration
+
+**User:**
+- Implement Vector Search using `intfloat/multilingual-e5-base`.
+- Create FastAPI application with centralized router for BM25, Vector, and Hybrid search.
+- Vector Search with **Qdrant** (Docker/Local).
+
+**AI:**
+- **Vector Search Core**:
+    - Created `src/ranking/vector.py` implementing `VectorRanker`.
+    - Integrated `sentence-transformers` for embedding generation.
+    - Switched model to `intfloat/multilingual-e5-base` (E5) due to compatibility issues.
+    - Implemented `passage:` prefix for indexing and `query:` prefix for searching (E5 requirement).
+- **Qdrant**:
+    - Created `docker-compose.yml` for Qdrant service.
+    - Implemented `VectorRanker` to support both **Docker Mode** (`localhost:6333`) and **Local Mode** (`path="./qdrant_storage"`) for flexibility.
+    - Used `query_points` API (instead of deprecated `search`) for robust local client support.
+- **Search API**:
+    - Created `src/router/api.py` with endpoints:
+        - `POST /search/bm25`
+        - `POST /search/vector`
+        - `POST /search/hybrid` (Weighted Merge)
+    - Created `app.py` as the application entry point using `FastAPI` lifespan for efficient resource loading.
+## Date: 2026-02-22
+
+**Task:** Enrich Search Results with Product Info from DB
+
+**User:**
+- Tạo hàm `get_products` trong `src/router/api.py` nhận `doc_ids`, truy vấn DB: `SELECT id, name, price FROM raw_products WHERE id = ANY(%s)`.
+- Các API `/search/bm25`, `/search/vector`, `/search/hybrid` gọi `get_products` để enrich kết quả trả về.
+
+**AI:**
+- Thêm global `db_conn = None` vào `src/router/api.py`.
+- Implement hàm `get_products(doc_ids: list) -> Dict`:
+    - Guard check `db_conn` và `doc_ids` trước khi query.
+    - Dùng `cursor.execute("SELECT id, name, price FROM raw_products WHERE id = ANY(%s)", (doc_ids,))`.
+    - Trả về dict `{str(id): {"name": ..., "price": ...}}`.
+    - Xử lý exception và trả về `{}` nếu lỗi.
+- Cập nhật `SearchResultItem` thêm 2 trường: `name: Optional[str] = None`, `price: Optional[float] = None`.
+- Cập nhật cả 3 search endpoint để collect `doc_ids` từ kết quả rank, gọi `get_products`, rồi map thông tin vào `SearchResultItem`.
+
+**User:** Output BM25 trả về `name: null`, `price: null`.
+
+**AI:**
+- Nguyên nhân: `db_conn` chưa được khởi tạo và inject vào router trong `app.py`.
+- Thêm block khởi tạo DB trong `lifespan` của `app.py`:
+    - Đọc `DATABASE_URL` từ `.env` (CockroachDB).
+    - `psycopg2.connect(database_url)` → inject `api.db_conn = db_conn`.
+    - Đóng connection khi shutdown.
+- `.env` đang dùng CockroachDB: `postgresql://...@...cockroachlabs.cloud.../defaultdb`.

@@ -92,8 +92,8 @@ def search_loop():
         # returns list of (doc_id, score)
         top_results = ranker.rank(query_tokens, candidate_postings, top_k=10)
         
-        # search_time = time.time() - start_search
-        # print(f"Found {len(top_results)} results in {search_time:.4f}s")
+        search_time = time.time() - start_search
+        print(f"Found {len(top_results)} results in {search_time:.4f}s")
         
         # 4. Fetch Details from DB & Display
         if not top_results:
@@ -123,8 +123,7 @@ def search_loop():
                 price = product.get("price", "N/A")
                 
                 print(f"{rank}. [ID: {doc_id}] {name} - Price: {price} (Score: {score:.4f})")
-        search_time = time.time() - start_search
-        print(f"Found {len(top_results)} results in {search_time:.4f}s")
+        
 
 def main():
     parser = argparse.ArgumentParser(description="Search Engine")
