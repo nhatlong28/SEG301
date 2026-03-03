@@ -1,11 +1,10 @@
-import sys
 import pickle
 import os
 import json
 from collections import defaultdict
 
 class SPIMIIndexer:
-    def __init__(self, block_size_limit_mb=200, output_dir="src/indexer/output_blocks"):
+    def __init__(self, block_size_limit_mb=50, output_dir="src/indexer/output_blocks"):
         self.block_size_limit = block_size_limit_mb * 1024 * 1024
         self.output_dir = output_dir
         self.dictionary = defaultdict(dict) # {term: {doc_id: tf}}
@@ -13,7 +12,8 @@ class SPIMIIndexer:
         self.doc_lengths = {}
         self.total_length = 0
         self.doc_count = 0
-        
+        self._estimated_size = 0  # incremental byte estimate of dictionary content
+
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
@@ -28,12 +28,16 @@ class SPIMIIndexer:
             self.doc_count += 1
             
             for term in tokens:
-                if doc_id not in self.dictionary[term]:
-                    self.dictionary[term][doc_id] = 0
-                self.dictionary[term][doc_id] += 1
-            
-            # Check memory usage
-            if sys.getsizeof(self.dictionary) >= self.block_size_limit:
+                is_new_term = term not in self.dictionary
+                is_new_posting = doc_id not in self.dictionary[term]
+                self.dictionary[term][doc_id] = self.dictionary[term].get(doc_id, 0) + 1
+
+                if is_new_term:
+                    self._estimated_size += len(term.encode())
+                if is_new_posting:
+                    self._estimated_size += 16
+
+            if self._estimated_size >= self.block_size_limit:
                 self.write_block()
         
         # Write remaining data
@@ -74,6 +78,6 @@ class SPIMIIndexer:
         with open(block_filename, 'wb') as f:
             pickle.dump(block_data, f)
             
-        # Reset dictionary and force garbage collection suggested implicitly by 'memory management'
         self.dictionary = defaultdict(dict)
+        self._estimated_size = 0
         print(f"Finished writing block {self.block_count}.")

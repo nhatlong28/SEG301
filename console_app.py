@@ -28,7 +28,7 @@ def build_index():
 
     # 2. SPIMI Indexing
     # Outputting blocks to 'src/indexer/output_blocks'
-    indexer = SPIMIIndexer(block_size_limit_mb=100, output_dir="src/indexer/output_blocks")
+    indexer = SPIMIIndexer(block_size_limit_mb=50, output_dir="src/indexer/output_blocks")
     indexer.run_indexing(product_gen)
     
     # 3. Merging

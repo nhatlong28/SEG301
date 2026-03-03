@@ -26,7 +26,7 @@ graph TD
     B --> C["spimi.py — SPIMI Indexer"]
 
     subgraph "Indexing Phase (SPIMI)"
-        C --> D{"RAM > 100MB?"}
+        C --> D{"RAM > 50MB?"}
         D -- "YES" --> E["write_block() → sort terms → block_N.bin"]
         E --> D
         D -- "NO (done)" --> F["Final write_block() + save metadata.pkl"]
@@ -119,7 +119,7 @@ def write_block(self):
 #### Why This Works for 1M Docs:
 | Concern | Solution |
 |:---|:---|
-| **RAM overflow** | Block limit of 100MB; flush to disk when exceeded |
+| **RAM overflow** | Block limit of 50MB; flush to disk when exceeded |
 | **Data continuity** | Generator streams docs one at a time |
 | **BM25 metadata** | `doc_lengths`, `N`, `total_length` persisted to `metadata.pkl` |
 | **Sorted blocks** | Each block internally sorted for K-Way Merge compatibility |
