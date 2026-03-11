@@ -20,3 +20,4 @@ output_blocks/
 final_index.bin
 lexicon.dat
 qdrant_data/
+chroma.sqlite3
