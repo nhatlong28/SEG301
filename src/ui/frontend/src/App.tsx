@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Header from './components/Header';
 import SearchPage from './pages/SearchPage';
 import DashboardPage from './pages/DashboardPage';
+import ProductDetailsPage from './pages/ProductDetailsPage';
 
 function App() {
     return (
@@ -11,6 +12,7 @@ function App() {
                 <Routes>
                     <Route path="/" element={<SearchPage />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/product/:id" element={<ProductDetailsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </div>

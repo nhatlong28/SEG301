@@ -4,6 +4,7 @@ import uvicorn
 import pickle
 import psycopg2
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
@@ -69,33 +70,47 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Failed to load Vector Engine: {e}")
 
-    # 3. Initialize DB Connection
+    # 3. Initialize DB Connection Pool
+    from psycopg2 import pool
     try:
         database_url = os.getenv("DATABASE_URL")
         if database_url:
-            db_conn = psycopg2.connect(database_url)
-        api.db_conn = db_conn
-        print("DB Connection Ready.")
+            print(f"Initializing DB Connection Pool...")
+            
+            # Use ThreadedConnectionPool for multithreaded FastAPI (sync routes)
+            # Normalize URL for CockroachDB compatibility
+            normalized_url = database_url.replace("sslmode=verify-full", "sslmode=require").replace("&sslrootcert=system", "")
+            
+            api.db_pool = pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=20, # Allow up to 20 concurrent DB connections
+                dsn=normalized_url
+            )
+            print("DB Connection Pool Ready.")
+        else:
+            print("Warning: DATABASE_URL not found.")
     except Exception as e:
-        print(f"Failed to connect to DB: {e}")
+        print(f"Failed to initialize DB Pool: {e}")
 
     yield
 
     print("Shutdown: Cleaning up...")
-    if db_conn:
-        db_conn.close()
+    if api.db_pool:
+        api.db_pool.closeall()
 
 app = FastAPI(title="Search Engine API", lifespan=lifespan)
 
-# Include Router
-app.include_router(api.router)
+# CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/")
-def health_check():
-    return {"status": "ok", "services": {
-        "bm25": bm25_ranker is not None,
-        "vector": vector_ranker is not None
-    }}
+# Include Router
+app.include_router(api.router, prefix="/api")
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)

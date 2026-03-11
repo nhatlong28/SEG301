@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Clock, AlertCircle, Sparkles, Grid, TrendingUp, Search } from 'lucide-react';
+import { Clock, AlertCircle, Sparkles, Grid, TrendingUp, Search, Flame } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import FilterSidebar from '../components/FilterSidebar';
 import { ProductCard, GroupedProductCard } from '../components/ProductCard';
 import { LoadingGrid } from '../components/Loading';
-import { searchProducts } from '../api';
-import { SearchResponse, Platform } from '../types';
+import { searchProducts, getSuggestedProducts } from '../api';
+import { SearchResponse, Platform, SearchMethod, ProductItem } from '../types';
 
 type ViewMode = 'grid' | 'grouped';
 
@@ -20,10 +20,31 @@ export default function SearchPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+    const [searchMethod, setSearchMethod] = useState<SearchMethod>('hybrid');
 
     const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([]);
     const [minPrice, setMinPrice] = useState<number | undefined>();
     const [maxPrice, setMaxPrice] = useState<number | undefined>();
+
+    // Suggested products for empty search state
+    const [suggestedProducts, setSuggestedProducts] = useState<ProductItem[]>([]);
+    const [loadingSuggested, setLoadingSuggested] = useState(true);
+
+    // Fetch suggested products once on mount
+    useEffect(() => {
+        const fetchSuggested = async () => {
+            setLoadingSuggested(true);
+            try {
+                const products = await getSuggestedProducts(24);
+                setSuggestedProducts(products);
+            } catch (err) {
+                console.error('Failed to load suggested products', err);
+            } finally {
+                setLoadingSuggested(false);
+            }
+        };
+        fetchSuggested();
+    }, []);
 
     useEffect(() => {
         if (!query) {
@@ -37,7 +58,7 @@ export default function SearchPage() {
             try {
                 const data = await searchProducts({
                     query,
-                    method: 'hybrid',
+                    method: searchMethod,
                     page,
                     limit: 20,
                     platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined,
@@ -54,7 +75,7 @@ export default function SearchPage() {
         };
 
         fetchResults();
-    }, [query, page, selectedPlatforms, minPrice, maxPrice]);
+    }, [query, page, selectedPlatforms, minPrice, maxPrice, searchMethod]);
 
     const handleSearch = (newQuery: string) => {
         setSearchParams({ q: newQuery, page: '1' });
@@ -80,6 +101,8 @@ export default function SearchPage() {
                     <aside className="hidden lg:block w-64 flex-shrink-0 border-r border-slate-100 bg-white">
                         <div className="sticky top-14 h-[calc(100vh-56px)] overflow-y-auto scrollbar-hide p-4">
                             <FilterSidebar
+                                selectedMethod={searchMethod}
+                                onMethodChange={setSearchMethod}
                                 selectedPlatforms={selectedPlatforms}
                                 onPlatformChange={setSelectedPlatforms}
                                 minPrice={minPrice}
@@ -108,16 +131,44 @@ export default function SearchPage() {
                         <main className="p-4">
                             {/* No Query State */}
                             {!query && (
-                                <div className="text-center py-20 animate-fade-in">
-                                    <div className="w-16 h-16 mx-auto mb-4 bg-emerald-100 rounded-2xl flex items-center justify-center">
-                                        <Search className="w-8 h-8 text-emerald-500" />
+                                <div className="animate-fade-in">
+                                    {/* Header */}
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-500 rounded-lg flex items-center justify-center">
+                                            <Flame className="w-4 h-4 text-white" />
+                                        </div>
+                                        <h2 className="text-lg font-semibold text-slate-700">
+                                            Sản phẩm gợi ý
+                                        </h2>
+                                        <span className="text-xs text-slate-400 ml-auto">Mới cập nhật</span>
                                     </div>
-                                    <h2 className="text-lg font-semibold text-slate-700 mb-2">
-                                        Bắt đầu tìm kiếm
-                                    </h2>
-                                    <p className="text-slate-500 text-sm max-w-sm mx-auto">
-                                        Nhập tên sản phẩm để tìm kiếm và so sánh giá từ nhiều sàn TMĐT
-                                    </p>
+
+                                    {/* Loading */}
+                                    {loadingSuggested && <LoadingGrid count={6} />}
+
+                                    {/* Products Grid */}
+                                    {!loadingSuggested && suggestedProducts.length > 0 && (
+                                        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                            {suggestedProducts.map((product, index) => (
+                                                <ProductCard key={product.id} product={product} index={index} />
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Fallback if no suggested products */}
+                                    {!loadingSuggested && suggestedProducts.length === 0 && (
+                                        <div className="text-center py-16">
+                                            <div className="w-16 h-16 mx-auto mb-4 bg-emerald-100 rounded-2xl flex items-center justify-center">
+                                                <Search className="w-8 h-8 text-emerald-500" />
+                                            </div>
+                                            <h2 className="text-lg font-semibold text-slate-700 mb-2">
+                                                Bắt đầu tìm kiếm
+                                            </h2>
+                                            <p className="text-slate-500 text-sm max-w-sm mx-auto">
+                                                Nhập tên sản phẩm để tìm kiếm và so sánh giá từ nhiều sàn TMĐT
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -136,9 +187,9 @@ export default function SearchPage() {
                                                 <Clock className="w-3 h-3" />
                                                 {results.execution_time_ms.toFixed(0)}ms
                                             </span>
-                                            <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded font-medium">
+                                            <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded font-medium uppercase">
                                                 <Sparkles className="w-3 h-3" />
-                                                HYBRID
+                                                {results.method}
                                             </span>
                                         </div>
                                     </div>
@@ -205,15 +256,15 @@ export default function SearchPage() {
                             {!loading && results && results.total_results > 0 && (
                                 <>
                                     {viewMode === 'grouped' && results.grouped_results.length > 0 ? (
-                                        <div className="space-y-3">
+                                        <div key="grouped-view" className="space-y-3">
                                             {results.grouped_results.map((group, index) => (
-                                                <GroupedProductCard key={index} group={group} index={index} />
+                                                <GroupedProductCard key={`group-${group.product_ids[0] || index}`} group={group} index={index} />
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <div key="grid-view" className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                                             {results.results.map((product, index) => (
-                                                <ProductCard key={product.id} product={product} index={index} />
+                                                <ProductCard key={`product-${product.id}`} product={product} index={index} />
                                             ))}
                                         </div>
                                     )}

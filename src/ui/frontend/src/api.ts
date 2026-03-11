@@ -122,8 +122,8 @@ function transformToProductItem(raw: RawProduct, index: number): ProductItem {
     platform = platform.toLowerCase().trim();
 
     return {
-        id: typeof raw.id === 'number' ? raw.id : index,
-        external_id: String(raw.id || index),
+        id: String(raw.id ?? index),
+        external_id: String(raw.id ?? index),
         name: raw.name || raw.title || raw.product_name || 'Unknown Product',
         name_normalized: (raw.name || raw.title || raw.product_name || '').toLowerCase(),
         price: raw.price,
@@ -211,6 +211,9 @@ export async function searchProducts(filters: SearchFilters): Promise<SearchResp
     params.set('query', filters.query);
 
     // Optional parameters
+    if (filters.method) {
+        params.set('method', filters.method);
+    }
     if (filters.limit) {
         params.set('limit', filters.limit.toString());
     }
@@ -298,6 +301,44 @@ const DEFAULT_STATS: DashboardStats = {
     last_updated: null,
     platform_distribution: [],
 };
+
+/**
+ * Fetch suggested/trending products for empty search state
+ */
+export async function getSuggestedProducts(limit: number = 20): Promise<ProductItem[]> {
+    const url = `${API_BASE}/products?limit=${limit}`;
+    console.log(`📡 Fetching suggested products: ${url}`);
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`⚠️ Products endpoint returned ${response.status}`);
+            return [];
+        }
+
+        const data = await response.json();
+        const rawProducts: RawProduct[] = data.data || data.products || data || [];
+
+        return rawProducts
+            .filter((raw: RawProduct) => raw.name && raw.image_url) // Only show products WITH images
+            .map((raw: RawProduct, idx: number) => transformToProductItem(raw, idx));
+    } catch (error) {
+        console.error("❌ Failed to fetch suggested products:", error);
+        return [];
+    }
+}
+
+/**
+ * Fetch detailed product info by ID
+ */
+export async function getProductDetails(id: string): Promise<ProductItem> {
+    const response = await fetch(`${API_BASE}/products/${id}`);
+    if (!response.ok) {
+        throw new Error('Product not found');
+    }
+    const result = await response.json();
+    return result.data;
+}
 
 /**
  * Get dashboard statistics

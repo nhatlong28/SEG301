@@ -98,3 +98,29 @@ class VectorRanker:
             })
                 
         return formatted_results
+
+    def get_existing_ids(self) -> set:
+        """
+        Fetch all existing point IDs from the collection.
+        This is used to resume indexing without re-processing already indexed documents.
+        """
+        print(f"Fetching existing IDs from collection {self.collection_name}...")
+        existing_ids = set()
+        next_page = None
+        
+        while True:
+            hits, next_page = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=10000,
+                with_payload=False,
+                with_vectors=False,
+                offset=next_page
+            )
+            for hit in hits:
+                existing_ids.add(hit.id)
+            
+            if next_page is None:
+                break
+                
+        print(f"Found {len(existing_ids)} existing IDs.")
+        return existing_ids

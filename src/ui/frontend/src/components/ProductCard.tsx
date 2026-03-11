@@ -1,4 +1,5 @@
-import { Star, ShoppingCart, ExternalLink, TrendingDown, Check, Sparkles } from 'lucide-react';
+import { Star, ShoppingCart, ExternalLink, TrendingDown, Check, Sparkles, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { ProductItem, ProductGroup } from '../types';
 import PlatformBadge from './PlatformBadge';
 
@@ -25,19 +26,31 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
     const hasDiscount = product.discount_percent && product.discount_percent > 0;
 
     return (
-        <div
-            className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow group animate-fade-in"
+        <Link
+            to={`/product/${product.id}`}
+            className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow group animate-fade-in block"
             style={{ animationDelay: `${index * 50}ms` }}
         >
             {/* Image Section - smaller */}
             <div className="relative aspect-[4/3] bg-slate-50 overflow-hidden">
                 {product.image_url ? (
-                    <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                    />
+                    <>
+                        <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                            onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = 'none';
+                                const fallback = target.parentElement?.querySelector('.img-fallback') as HTMLElement;
+                                if (fallback) fallback.style.display = 'flex';
+                            }}
+                        />
+                        <div className="img-fallback w-full h-full items-center justify-center hidden absolute inset-0 bg-slate-50">
+                            <ShoppingCart className="w-16 h-16 text-slate-300" />
+                        </div>
+                    </>
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
                         <ShoppingCart className="w-16 h-16 text-slate-300" />
@@ -92,7 +105,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                     </p>
                 )}
             </div>
-        </div>
+        </Link>
     );
 }
 
@@ -118,14 +131,25 @@ export function GroupedProductCard({ group, index = 0 }: GroupedProductCardProps
         >
             <div className="flex flex-col md:flex-row">
                 {/* Image Section - smaller */}
-                <div className="md:w-44 lg:w-48 aspect-square md:aspect-[4/3] bg-slate-50 flex-shrink-0 relative overflow-hidden">
+                <div className="w-full md:w-44 lg:w-48 md:min-w-[11rem] md:max-w-[11rem] lg:min-w-[12rem] lg:max-w-[12rem] aspect-square md:aspect-[4/3] bg-slate-50 flex-shrink-0 relative overflow-hidden">
                     {group.image_url ? (
-                        <img
-                            src={group.image_url}
-                            alt={group.canonical_name}
-                            className="w-full h-full object-contain p-2"
-                            loading="lazy"
-                        />
+                        <>
+                            <img
+                                src={group.image_url}
+                                alt={group.canonical_name}
+                                className="w-full h-full object-contain p-2"
+                                loading="lazy"
+                                onError={(e) => {
+                                    const target = e.currentTarget;
+                                    target.style.display = 'none';
+                                    const fallback = target.parentElement?.querySelector('.img-fallback') as HTMLElement;
+                                    if (fallback) fallback.style.display = 'flex';
+                                }}
+                            />
+                            <div className="img-fallback w-full h-full items-center justify-center hidden absolute inset-0 bg-slate-50">
+                                <ShoppingCart className="w-12 h-12 text-slate-300" />
+                            </div>
+                        </>
                     ) : (
                         <div className="w-full h-full flex items-center justify-center p-4">
                             <ShoppingCart className="w-12 h-12 text-slate-300" />
@@ -145,9 +169,11 @@ export function GroupedProductCard({ group, index = 0 }: GroupedProductCardProps
                 {/* Content Section - compact */}
                 <div className="flex-1 p-4">
                     {/* Title - thinner font */}
-                    <h3 className="font-normal text-base lg:text-lg text-slate-800 mb-2 line-clamp-2">
-                        {group.canonical_name}
-                    </h3>
+                    <Link to={`/product/${group.product_ids[0] ?? ''}`}>
+                        <h3 className="font-normal text-base lg:text-lg text-slate-800 mb-2 line-clamp-2 hover:text-emerald-600 transition-colors cursor-pointer">
+                            {group.canonical_name}
+                        </h3>
+                    </Link>
 
                     {/* Rating */}
                     {group.avg_rating && group.avg_rating > 0 && (
@@ -219,6 +245,13 @@ export function GroupedProductCard({ group, index = 0 }: GroupedProductCardProps
                                             <span className={`font-bold text-lg ${offerIndex === 0 ? 'text-green-600' : 'text-slate-700'}`}>
                                                 {formatPrice(offer.price)}
                                             </span>
+                                            <Link
+                                                to={`/product/${offer.platform === group.best_platform ? group.product_ids[0] : ((offer as any).id ?? group.product_ids[0])}`}
+                                                className="p-2 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 
+                                   rounded-lg transition-all duration-200 group/link"
+                                            >
+                                                <Info className="w-4 h-4 text-slate-400 group-hover/link:text-emerald-500" />
+                                            </Link>
                                             <a
                                                 href={offer.url}
                                                 target="_blank"

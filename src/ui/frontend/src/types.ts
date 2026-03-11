@@ -2,10 +2,10 @@
 
 export type SearchMethod = 'bm25' | 'vector' | 'hybrid';
 
-export type Platform = 'shopee' | 'tiki' | 'lazada' | 'cellphones' | 'dienmayxanh' | 'thegioididong';
+export type Platform = 'shopee' | 'tiki' | 'lazada' | 'cellphones' | 'dienmayxanh' | 'thegioididong' | 'chotot';
 
 export interface ProductItem {
-    id: number;
+    id: string;
     external_id: string;
     name: string;
     name_normalized?: string;
@@ -23,6 +23,7 @@ export interface ProductItem {
     sold_count: number;
     available: boolean;
     specs: Record<string, unknown>;
+    description?: string;
 }
 
 export interface PriceOffer {
@@ -42,7 +43,7 @@ export interface ProductGroup {
     offers: PriceOffer[];
     avg_rating?: number;
     total_reviews: number;
-    product_ids: number[];
+    product_ids: string[];
 }
 
 export interface SearchResponse {
