@@ -13,6 +13,12 @@ brain/
 *.png
 *.jpg
 .nha
+utils/
+types/
+db/ 
+logs/
+.vscode/
+
 
 # python
 __pycache__/
@@ -20,3 +26,4 @@ output_blocks/
 final_index.bin
 lexicon.dat
 qdrant_data/
+chroma_db/

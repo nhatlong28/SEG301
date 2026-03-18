@@ -18,7 +18,9 @@ def index_all_products(limit: int = None):
     ranker = VectorRanker()
     
     try:
-        conn = psycopg2.connect(db_url)
+        conn = None
+        normalized_url = db_url.replace("sslmode=verify-full", "sslmode=require").replace("&sslrootcert=system", "")
+        conn = psycopg2.connect(normalized_url)
         with conn.cursor(name='vector_indexer_cursor') as cursor:
             print("Querying database...")
             cursor.execute("SELECT id, name_normalized FROM raw_products WHERE name_normalized IS NOT NULL AND name_normalized != ''")
