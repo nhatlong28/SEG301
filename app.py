@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from src.indexer.reader import IndexReader
 from src.ranking.bm25 import BM25Ranker
 from src.ranking.vector import VectorRanker
-from src.router import api
+from src.router import api_router, deps
 
 load_dotenv()
 
@@ -48,9 +48,9 @@ async def lifespan(app: FastAPI):
                 N=metadata['N']
             )
             
-            # Inject into router
-            api.index_reader = index_reader
-            api.bm25_ranker = bm25_ranker
+            # Inject into router deps
+            deps.index_reader = index_reader
+            deps.bm25_ranker = bm25_ranker
             print("BM25 Engine Ready.")
         else:
             print("Warning: BM25 index files not found. BM25 search will fail.")
@@ -64,8 +64,8 @@ async def lifespan(app: FastAPI):
         # Check if we should use GPU or anything speicific? Defaults are fine.
         vector_ranker = VectorRanker()
         
-        # Inject into router
-        api.vector_ranker = vector_ranker
+        # Inject into router deps
+        deps.vector_ranker = vector_ranker
         print("Vector Engine Ready.")
     except Exception as e:
         print(f"Failed to load Vector Engine: {e}")
@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
             # Normalize URL for CockroachDB compatibility
             normalized_url = database_url.replace("sslmode=verify-full", "sslmode=require").replace("&sslrootcert=system", "")
             
-            api.db_pool = pool.ThreadedConnectionPool(
+            deps.db_pool = pool.ThreadedConnectionPool(
                 minconn=1,
                 maxconn=20, # Allow up to 20 concurrent DB connections
                 dsn=normalized_url
@@ -95,8 +95,8 @@ async def lifespan(app: FastAPI):
     yield
 
     print("Shutdown: Cleaning up...")
-    if api.db_pool:
-        api.db_pool.closeall()
+    if deps.db_pool:
+        deps.db_pool.closeall()
 
 app = FastAPI(title="Search Engine API", lifespan=lifespan)
 
@@ -110,7 +110,7 @@ app.add_middleware(
 )
 
 # Include Router
-app.include_router(api.router, prefix="/api")
+app.include_router(api_router, prefix="/api")
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
