@@ -38,7 +38,7 @@ graph TD
 
 ---
 
-## 3. AI FEATURES: VECTOR SEARCH & HYBRID SEARCH (3/3 points)
+## 3. AI FEATURES: VECTOR SEARCH & HYBRID SEARCH
 
 ### 3.1 Vector Search
 
@@ -50,16 +50,16 @@ graph TD
 ### 3.2 Hybrid Search
 
 - Endpoint: `POST /api/search/hybrid` (`src/router/api_search.py`)
-- **Per-query Min-Max normalization** for BM25 & Vector, fused with \(\alpha\) (default 0.5).
-- Candidates: each engine retrieves **top \(2 \times top\_k\)** before fusion.
+- **Per-query Min-Max normalization** for BM25 & Vector, fused with $\alpha$ (default 0.5).
+- Candidates: each engine retrieves **top $2 \times top\_k$** before fusion.
 
-\[
+$$
 \text{FinalScore}(d) = \alpha \cdot \text{VectorNorm}(d) + (1-\alpha)\cdot \text{BM25Norm}(d)
-\]
+$$
 
 ---
 
-## 4. WEB PRODUCT (3/3 points)
+## 4. WEB PRODUCT
 
 ### 4.1 Tech stack (matches the repo)
 
@@ -82,7 +82,7 @@ graph TD
 - **Evaluation Mechanism:** **Phrase-based Matching** (lightweight and independent of LLM/S-BERT to eliminate AI hallucinations):
   - **BM25 Targets:** Match the frequency of exact "tokens" extracted from the query within the product name. Score is based on the match percentage.
   - **Vector Targets:** Match complete semantic/category phrases (e.g., "điện thoại thông minh", "màn hình gập"). Presence of at least 1 phrase $\rightarrow$ Perfect score.
-  - **Hybrid Rules:** Uses the exact arithmetic mean (\( \frac{\text{BM25} + \text{Vector}}{2} \)) to evaluate multi-dimensional harmony.
+  - **Hybrid Rules:** Uses the exact arithmetic mean ($\frac{\text{BM25} + \text{Vector}}{2}$) to evaluate multi-dimensional harmony.
 - **Metric Calculations:** Precision@10 (P@10), Mean Reciprocal Rank (MRR), and NDCG@10. "Relevant" threshold is $\ge 0.5$.
 
 **Summary Results:**
@@ -114,8 +114,8 @@ graph TD
 
 ---
 
-## 8. CONCLUSION & PRESENTATION (2/2 points)
+## 8. CONCLUSION & PRESENTATION
 
 - **Complete product:** Web UI + Backend API with BM25/Vector/Hybrid, filters, pagination, and dashboard.
-- **AI requirement met:** Vector Search (Qdrant + multilingual E5) and Hybrid fusion (\(\alpha\)) improve semantic search quality.
+- **AI requirement met:** Vector Search (Qdrant + multilingual E5) and Hybrid fusion ($\alpha$) improve semantic search quality.
 - **Transparent AI logs:** AI interaction logs are included in the repository (e.g., `ai_log_long.md`, `ai_log_*.md`).
